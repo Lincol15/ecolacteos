@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Registrar Entrega - VACA SYS')
+@section('title', 'Registrar Entrega - Ecolácteos Huata')
 @section('page-title', 'Registrar Entrega de Leche')
 @section('page-subtitle', 'Nueva entrega de leche recolectada al productor')
 
@@ -41,6 +41,7 @@
                                 {{ $p->user?->fullname ?? 'Productor' }} ({{ $p->code ?? 'Sin código' }})
                             </option>
                             @empty
+                            <option value="" disabled>Sin productores asignados — contacta al administrador</option>
                             @endforelse
                         </select>
                     </div>
@@ -88,7 +89,7 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label">Placa del Vehículo</label>
-                        <input type="text" name="vehicle_plate" value="{{ old('vehicle_plate', auth()->user()->vehicle_plate ?? '') }}" class="form-input" placeholder="ABC-123">
+                        <input type="text" name="vehicle_plate" value="{{ old('vehicle_plate', auth()->user()->vehiculo ?? '') }}" class="form-input" placeholder="ABC-123">
                     </div>
                     <div class="form-group" style="grid-column:1 / -1">
                         <label class="form-label">Observaciones</label>

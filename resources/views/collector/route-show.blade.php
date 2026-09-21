@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Detalle Ruta - VACA SYS')
+@section('title', 'Detalle Ruta - Ecolácteos Huata')
 @section('page-title', 'Detalle de Ruta')
 @section('page-subtitle', 'Gestión de paradas y entregas de la ruta')
 

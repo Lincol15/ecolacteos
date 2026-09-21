@@ -15,6 +15,7 @@ class MilkDelivery extends Model
         'collector_id',
         'route_stop_id',
         'collection_route_id',
+        'zona',
         'liters',
         'temperature',
         'price_per_liter',
@@ -27,6 +28,7 @@ class MilkDelivery extends Model
         'observations',
         'has_quality_analysis',
         'status',
+        'recibido',
         'approved_by',
         'approved_at',
     ];
@@ -41,6 +43,7 @@ class MilkDelivery extends Model
             'delivery_date' => 'date',
             'delivery_time' => 'datetime',
             'has_quality_analysis' => 'boolean',
+            'recibido' => 'boolean',
             'approved_at' => 'datetime',
         ];
     }
@@ -51,6 +54,11 @@ class MilkDelivery extends Model
         'rechazado' => 'Rechazado',
         'analizado' => 'Analizado',
     ];
+
+    public function getRecibidoLabelAttribute(): string
+    {
+        return $this->recibido ? 'Recibido en Planta' : 'En Tránsito';
+    }
 
     public const CONTAINER_TYPES = [
         'caneca' => 'Caneca',

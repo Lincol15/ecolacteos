@@ -14,9 +14,17 @@ class QualityReportService
     public function create(array $data, int $analystId): QualityReport
     {
         return DB::transaction(function () use ($data, $analystId) {
+            $delivery = ! empty($data['milk_delivery_id'])
+                ? MilkDelivery::find($data['milk_delivery_id'])
+                : null;
+
+            // Un análisis siempre debe quedar ligado a un productor, ya sea
+            // directamente o a través de la entrega seleccionada (id_registro_acopio es opcional).
+            $data['producer_id'] = $data['producer_id'] ?? $delivery?->producer_id;
+
             // Generar código de muestra si no se proporciona
-            if (!isset($data['sample_code']) || empty($data['sample_code'])) {
-                $data['sample_code'] = $this->generateSampleCode($data['milk_delivery_id']);
+            if (! isset($data['sample_code']) || empty($data['sample_code'])) {
+                $data['sample_code'] = $this->generateSampleCode($data['milk_delivery_id'] ?? $data['producer_id']);
             }
 
             // Crear reporte
@@ -26,14 +34,16 @@ class QualityReportService
                 'analyzed_at' => now(),
             ]);
 
-            // Actualizar estado de la entrega
-            $delivery = MilkDelivery::find($data['milk_delivery_id']);
-            $delivery->update([
+            // Actualizar estado de la entrega (si el análisis está ligado a una).
+            // El análisis se hace en planta, así que al registrarlo la leche
+            // queda marcada como recibida físicamente (sale de "En Tránsito").
+            $delivery?->update([
                 'has_quality_analysis' => true,
                 'status' => $data['result'] === 'rechazado' ? 'rechazado' : 'analizado',
+                'recibido' => true,
             ]);
 
-            return $report->fresh(['milkDelivery.producer.user', 'analyst']);
+            return $report->fresh(['milkDelivery.producer.user', 'producer.user', 'analyst']);
         });
     }
 
@@ -45,8 +55,8 @@ class QualityReportService
         return DB::transaction(function () use ($report, $data) {
             $report->update($data);
 
-            // Si cambió el resultado, actualizar la entrega
-            if (isset($data['result'])) {
+            // Si cambió el resultado, actualizar la entrega (si existe)
+            if (isset($data['result']) && $report->milkDelivery) {
                 $report->milkDelivery->update([
                     'status' => $data['result'] === 'rechazado' ? 'rechazado' : 'analizado',
                 ]);
@@ -107,15 +117,15 @@ class QualityReportService
         }
 
         // Si hay issues menores pero no es rechazado, marcar como observado
-        if (!empty($issues) && $result === 'aprobado') {
+        if (! empty($issues) && $result === 'aprobado') {
             $result = 'observado';
         }
 
         return [
             'result' => $result,
             'rejection_reason' => $rejectionReason,
-            'auto_observations' => !empty($issues)
-                ? 'Evaluación automática: ' . implode(', ', $issues)
+            'auto_observations' => ! empty($issues)
+                ? 'Evaluación automática: '.implode(', ', $issues)
                 : 'Todos los parámetros dentro del rango normal',
         ];
     }
@@ -155,6 +165,6 @@ class QualityReportService
      */
     protected function generateSampleCode(int $deliveryId): string
     {
-        return 'MUE-' . $deliveryId . '-' . strtoupper(substr(md5((string)$deliveryId . now()), 0, 4));
+        return 'MUE-'.$deliveryId.'-'.strtoupper(substr(md5((string) $deliveryId.now()), 0, 4));
     }
 }

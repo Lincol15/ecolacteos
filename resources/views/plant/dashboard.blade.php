@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Dashboard Planta - VACA SYS')
+@section('title', 'Dashboard Planta - Ecolácteos Huata')
 @section('page-title', 'Panel de Planta')
 @section('page-subtitle', 'Control de producción, lotes e inventario en tiempo real')
 

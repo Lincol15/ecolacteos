@@ -58,24 +58,23 @@
                     <label class="form-label">Teléfono</label>
                     <input type="text" name="phone" value="{{ old('phone') }}" class="form-input" placeholder="Ej: +51 987654321">
                 </div>
-                <div class="form-group" id="producerField" style="display:none;">
-                    <label class="form-label">ID Productor Asociado</label>
-                    <select name="producer_id" class="form-select">
-                        <option value="">Sin asociar</option>
-                        @forelse($producers ?? [] as $prod)
-                        <option value="{{ $prod->id }}" {{ old('producer_id') == $prod->id ? 'selected' : '' }}>
-                            {{ $prod->code }} - {{ $prod->farm_name }}
-                        </option>
-                        @empty
-                        <option value="">No hay productores disponibles</option>
-                        @endforelse
-                    </select>
+                <div class="form-group">
+                    <label class="form-label">Dirección</label>
+                    <input type="text" name="address" value="{{ old('address') }}" class="form-input" placeholder="Dirección del usuario">
+                </div>
+                <div class="form-group" id="comunidadField" style="display:none;">
+                    <label class="form-label">Comunidad</label>
+                    <input type="text" name="comunidad" value="{{ old('comunidad') }}" class="form-input" placeholder="Ej: Huata Centro">
+                </div>
+                <div class="form-group" id="vehiculoField" style="display:none;">
+                    <label class="form-label">Vehículo (placa)</label>
+                    <input type="text" name="vehiculo" value="{{ old('vehiculo') }}" class="form-input" placeholder="Ej: AB-1234">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Estado *</label>
-                    <select name="status" required class="form-select">
-                        <option value="activo" {{ old('status', 'activo') == 'activo' ? 'selected' : '' }}>✅ Activo</option>
-                        <option value="inactivo" {{ old('status') == 'inactivo' ? 'selected' : '' }}>❌ Inactivo</option>
+                    <select name="active" required class="form-select">
+                        <option value="1" {{ old('active', '1') == '1' ? 'selected' : '' }}>✅ Activo</option>
+                        <option value="0" {{ old('active') == '0' ? 'selected' : '' }}>❌ Inactivo</option>
                     </select>
                 </div>
             </div>
@@ -89,7 +88,8 @@
 
 <script>
 document.getElementById('roleSelect').addEventListener('change', function() {
-    document.getElementById('producerField').style.display = this.value === 'productor' ? 'block' : 'none';
+    document.getElementById('comunidadField').style.display = ['productor', 'acopiador'].includes(this.value) ? 'block' : 'none';
+    document.getElementById('vehiculoField').style.display = this.value === 'acopiador' ? 'block' : 'none';
 });
 </script>
 @endsection

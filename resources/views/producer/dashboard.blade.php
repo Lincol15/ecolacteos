@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Dashboard Productor - VACA SYS')
+@section('title', 'Dashboard Productor - Ecolácteos Huata')
 @section('page-title', 'Mi Panel')
 @section('page-subtitle', 'Resumen personal de tu producción láctea')
 

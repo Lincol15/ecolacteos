@@ -8,6 +8,7 @@ class Notification extends Model
 {
     protected $fillable = [
         'target',
+        'user_id',
         'title',
         'message',
         'priority',
@@ -46,6 +47,21 @@ class Notification extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function recipient()
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function reads()
+    {
+        return $this->hasMany(NotificationRead::class);
+    }
+
+    public function isReadBy(User $user): bool
+    {
+        return $this->reads()->where('user_id', $user->id)->exists();
+    }
+
     public function scopeVisibleForUser($query, User $user)
     {
         $targets = ['todos'];
@@ -63,7 +79,12 @@ class Notification extends Model
         }
 
         return $query
-            ->whereIn('target', $targets)
+            ->where(function ($q) use ($user, $targets) {
+                $q->where('user_id', $user->id)
+                    ->orWhere(function ($q2) use ($targets) {
+                        $q2->whereNull('user_id')->whereIn('target', $targets);
+                    });
+            })
             ->where('is_active', true)
             ->where(function ($q) {
                 $q->whereNull('expires_at')

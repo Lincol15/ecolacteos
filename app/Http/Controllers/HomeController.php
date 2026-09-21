@@ -2,12 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Complaint;
 use App\Models\ContactMessage;
 use App\Models\Notification;
 use App\Models\PlantConfig;
-use App\Models\Product;
 use App\Models\Producer;
+use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -25,7 +24,9 @@ class HomeController extends Controller
             'products' => $products->count(),
             'price' => PlantConfig::getValue('precio_litro_leche', 1.70),
         ];
-        return view('welcome', compact('products', 'stats', 'notifications'));
+        $featuredProducts = $products->take(3);
+
+        return view('welcome', compact('products', 'featuredProducts', 'stats', 'notifications'));
     }
 
     public function about()
@@ -37,6 +38,7 @@ class HomeController extends Controller
     {
         $products = Product::where('show_in_catalog', true)->where('is_active', true)
             ->orderBy('sort_order')->orderBy('name')->paginate(12);
+
         return view('public.catalog', compact('products'));
     }
 
@@ -47,6 +49,7 @@ class HomeController extends Controller
             ->where('id', '!=', $product->id)
             ->where('is_active', true)
             ->limit(4)->get();
+
         return view('public.product', compact('product', 'related'));
     }
 
@@ -65,6 +68,7 @@ class HomeController extends Controller
             'message' => 'required|string|max:2000',
         ]);
         ContactMessage::create($data);
+
         return redirect()->route('contact')->with('success', 'Gracias por su mensaje. Nos pondremos en contacto a la brevedad.');
     }
 
@@ -73,6 +77,7 @@ class HomeController extends Controller
         if (auth()->check()) {
             return redirect()->intended($this->dashboardByRole(auth()->user()));
         }
+
         return view('auth.login');
     }
 
@@ -86,12 +91,15 @@ class HomeController extends Controller
         if (Auth::attempt([$loginField => $request->email, 'password' => $request->password], $request->filled('remember'))) {
             $request->session()->regenerate();
             $user = auth()->user();
-            if (!$user->active) {
+            if (! $user->active) {
                 Auth::logout();
+
                 return back()->withErrors(['email' => 'Su cuenta se encuentra inactiva.'])->onlyInput('email');
             }
+
             return redirect()->intended($this->dashboardByRole($user));
         }
+
         return back()->withErrors(['email' => 'Credenciales inválidas.'])->onlyInput('email');
     }
 
@@ -100,6 +108,7 @@ class HomeController extends Controller
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+
         return redirect()->route('home');
     }
 

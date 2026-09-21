@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Dashboard Control Calidad - VACA SYS')
+@section('title', 'Dashboard Control Calidad - Ecolácteos Huata')
 @section('page-title', 'Panel de Laboratorio')
 @section('page-subtitle', 'Gestión y control de calidad de leche en tiempo real')
 
@@ -52,13 +52,17 @@
         </div>
         <div class="panel-body">
             @forelse($paramStats ?? [] as $param)
+            @php
+                $range = ($param['max'] ?? 0) - ($param['min'] ?? 0);
+                $percent = $range > 0 ? ((($param['avg'] ?? 0) - $param['min']) / $range) * 100 : 70;
+            @endphp
             <div style="padding:10px 0; border-bottom:1px solid #f1f5f9">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                    <div style="font-weight:600;font-size:13.5px">{{ $param['name'] }}</div>
-                    <div style="font-weight:700;color:#059669">{{ $param['value'] }}{{ $param['unit'] ?? '' }}</div>
+                    <div style="font-weight:600;font-size:13.5px">{{ $param['label'] ?? '' }}</div>
+                    <div style="font-weight:700;color:#059669">{{ number_format($param['avg'] ?? 0, 2) }}{{ $param['unit'] ?? '' }}</div>
                 </div>
                 <div class="progress-wrap">
-                    <div class="progress" style="width:{{ min($param['percent'] ?? 70, 100) }}%"></div>
+                    <div class="progress" style="width:{{ max(0, min($percent, 100)) }}%"></div>
                 </div>
             </div>
             @empty

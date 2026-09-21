@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests;
 
+use App\Models\PlantConfig;
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreMilkDeliveryRequest extends FormRequest
@@ -17,7 +19,7 @@ class StoreMilkDeliveryRequest extends FormRequest
     /**
      * Get the validation rules that apply to the request.
      *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
@@ -25,7 +27,7 @@ class StoreMilkDeliveryRequest extends FormRequest
             'producer_id' => 'required|exists:producers,id',
             'route_stop_id' => 'nullable|exists:route_stops,id',
             'collection_route_id' => 'nullable|exists:collection_routes,id',
-            'liters' => 'required|numeric|min:0.1|max:10000',
+            'liters' => 'required|numeric|min:0.1|max:'.$this->maxLiters(),
             'temperature' => 'nullable|numeric|min:2|max:10',
             'price_per_liter' => 'nullable|numeric|min:0|max:100',
             'delivery_date' => 'required|date|before_or_equal:today',
@@ -46,7 +48,7 @@ class StoreMilkDeliveryRequest extends FormRequest
             'producer_id.exists' => 'El productor seleccionado no existe',
             'liters.required' => 'Debe ingresar la cantidad de litros',
             'liters.min' => 'La cantidad mínima es 0.1 litros',
-            'liters.max' => 'La cantidad máxima es 10,000 litros',
+            'liters.max' => 'La cantidad máxima permitida es '.number_format($this->maxLiters(), 0).' litros',
             'temperature.min' => 'La temperatura no puede ser menor a 2°C',
             'temperature.max' => 'La temperatura no puede exceder 10°C',
             'delivery_date.required' => 'La fecha de entrega es obligatoria',
@@ -62,8 +64,13 @@ class StoreMilkDeliveryRequest extends FormRequest
         // Normalizar datos si es necesario
         if ($this->has('liters')) {
             $this->merge([
-                'liters' => (float) str_replace(',', '.', (string)$this->liters),
+                'liters' => (float) str_replace(',', '.', (string) $this->liters),
             ]);
         }
+    }
+
+    protected function maxLiters(): float
+    {
+        return (float) PlantConfig::getValue('litros_maximos_entrega', 10000);
     }
 }

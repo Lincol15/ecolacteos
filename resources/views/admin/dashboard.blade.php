@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Dashboard - VACA SYS')
+@section('title', 'Dashboard - Ecolácteos Huata')
 @section('page-title', 'Panel de Control')
 @section('page-subtitle', 'Vista general de operaciones lácteas en tiempo real')
 
@@ -45,6 +45,16 @@
         <div class="stat-icon-wrap amber">💹</div>
         <div class="stat-label">Precio / Litro Leche</div>
         <div class="stat-value amber">S/ {{ number_format($stats['milk_price'] ?? 0, 2) }}</div>
+    </div>
+    <div class="stat-card blue">
+        <div class="stat-icon-wrap blue">📋</div>
+        <div class="stat-label">Acopios Registrados Hoy</div>
+        <div class="stat-value blue">{{ $stats['deliveries_count'] ?? 0 }}</div>
+    </div>
+    <div class="stat-card green">
+        <div class="stat-icon-wrap green">📥</div>
+        <div class="stat-label">Recibidos en Planta / En Tránsito</div>
+        <div class="stat-value green" style="font-size:22px">{{ $stats['deliveries_received'] ?? 0 }} / {{ $stats['deliveries_in_transit'] ?? 0 }}</div>
     </div>
 </div>
 
@@ -121,13 +131,13 @@
             <div style="padding:11px 0; border-bottom:1px solid #f1f5f9">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
                     <div style="display:flex;align-items:center;gap:10px">
-                        <span style="width:26px;height:26px;border-radius:50%;background:{{ $idx === 0 ? 'linear-gradient(135deg,#fbbf24,#f59e0b)' : ($idx === 1 ? 'linear-gradient(135deg,#94a3b8,#64748b)' : ($idx === 2 ? 'linear-gradient(135deg,#fb923c,#ea580c)' : '#e2e8f0')) }};color:{{ $idx < 3 ? '#fff' : '#64748b' }};font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center">{{ $idx + 1 }}</span>
+                        <span style="width:26px;height:26px;border-radius:50%;background:{{ $idx === 0 ? 'linear-gradient(135deg,#fbbf24,#F2C94C)' : ($idx === 1 ? 'linear-gradient(135deg,#94a3b8,#64748b)' : ($idx === 2 ? 'linear-gradient(135deg,#fb923c,#ea580c)' : '#e2e8f0')) }};color:{{ $idx < 3 ? '#fff' : '#64748b' }};font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center">{{ $idx + 1 }}</span>
                         <div>
                             <div style="font-weight:600;font-size:13.5px">{{ $p->user?->fullname ?? 'N/A' }}</div>
                             <div style="font-size:11px;color:#94a3b8">{{ $p->code }}</div>
                         </div>
                     </div>
-                    <div style="font-weight:800;color:#059669">{{ number_format($p->month_liters ?? 0, 1) }} L</div>
+                    <div style="font-weight:800;color:#054529">{{ number_format($p->month_liters ?? 0, 1) }} L</div>
                 </div>
                 <div class="progress-wrap" style="height:6px">
                     <div class="progress" style="width:{{ $milkByProductor->max('month_liters') > 0 ? ($p->month_liters / $milkByProductor->max('month_liters') * 100) : 0 }}%"></div>
@@ -153,7 +163,7 @@
                     <tr>
                         <td style="font-weight:600;color:#2563eb">{{ $s->invoice_number }}</td>
                         <td>{{ $s->client_name }}</td>
-                        <td style="font-weight:700;color:#059669">S/ {{ number_format($s->total_amount, 2) }}</td>
+                        <td style="font-weight:700;color:#054529">S/ {{ number_format($s->total_amount, 2) }}</td>
                         <td>
                             @if($s->payment_status === 'pagado') <span class="badge badge-green">Pagado</span>
                             @elseif($s->payment_status === 'pendiente') <span class="badge badge-amber">Pendiente</span>
@@ -176,7 +186,7 @@
             </div>
             <div class="panel-body" style="padding:12px 0">
                 @forelse($notifications ?? [] as $n)
-                <div style="padding:14px 22px;border-left:4px solid {{ $n->priority === 'urgente' ? '#ef4444' : ($n->priority === 'alta' ? '#f59e0b' : '#3b82f6') }};margin-bottom:4px;background:{{ $n->priority === 'urgente' ? '#fef2f2' : ($n->priority === 'alta' ? '#fffbeb' : '#eff6ff') }}">
+                <div style="padding:14px 22px;border-left:4px solid {{ $n->priority === 'urgente' ? '#C62828' : ($n->priority === 'alta' ? '#F2C94C' : '#1565C0') }};margin-bottom:4px;background:{{ $n->priority === 'urgente' ? '#fef2f2' : ($n->priority === 'alta' ? '#fffbeb' : '#eff6ff') }}">
                     <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:4px">
                         <div style="font-weight:700;font-size:14px">{{ $n->title }}</div>
                         <span class="badge {{ $n->priority === 'urgente' ? 'badge-red' : ($n->priority === 'alta' ? 'badge-amber' : 'badge-blue') }}">{{ $n->priority }}</span>
@@ -221,13 +231,13 @@ document.addEventListener('DOMContentLoaded', function() {
             datasets: [{
                 label: 'Litros recolectados',
                 data: @json($collectionLiters ?? []),
-                borderColor: '#10b981',
-                backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                borderColor: '#075B3A',
+                backgroundColor: 'rgba(46, 125, 50, 0.12)',
                 fill: true,
                 tension: 0.4,
                 borderWidth: 3,
                 pointRadius: 3,
-                pointBackgroundColor: '#059669'
+                pointBackgroundColor: '#054529'
             }]
         },
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: '#f1f5f9' } }, x: { grid: { display: false } } } }

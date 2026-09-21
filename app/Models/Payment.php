@@ -17,11 +17,14 @@ class Payment extends Model
         'period_end',
         'payment_date',
         'total_liters',
+        'detalle_diario',
         'avg_price_per_liter',
+        'precio_por_litro',
         'base_amount',
         'quality_bonus',
         'production_bonus',
         'deductions',
+        'llevado_a_planta',
         'total_amount',
         'deductions_detail',
         'bonus_detail',
@@ -39,11 +42,14 @@ class Payment extends Model
             'period_end' => 'date',
             'payment_date' => 'date',
             'total_liters' => 'decimal:2',
+            'detalle_diario' => 'array',
             'avg_price_per_liter' => 'decimal:2',
+            'precio_por_litro' => 'decimal:2',
             'base_amount' => 'decimal:2',
             'quality_bonus' => 'decimal:2',
             'production_bonus' => 'decimal:2',
             'deductions' => 'decimal:2',
+            'llevado_a_planta' => 'decimal:2',
             'total_amount' => 'decimal:2',
         ];
     }
@@ -52,6 +58,7 @@ class Payment extends Model
         'pendiente' => 'Pendiente',
         'procesando' => 'Procesando',
         'pagado' => 'Pagado',
+        'parcial' => 'Parcial',
         'rechazado' => 'Rechazado',
     ];
 
@@ -80,6 +87,7 @@ class Payment extends Model
     {
         $start = $this->period_start?->format('d/m/Y');
         $end = $this->period_end?->format('d/m/Y');
+
         return "{$start} - {$end}";
     }
 }

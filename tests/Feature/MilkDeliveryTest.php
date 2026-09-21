@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\MilkDelivery;
+use App\Models\PlantConfig;
 use App\Models\Producer;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -34,6 +35,23 @@ class MilkDeliveryTest extends TestCase
             'collector_id' => $collector->id,
             'liters' => 100.5,
             'status' => 'registrado',
+        ]);
+    }
+
+    public function test_delivery_zona_is_autofilled_from_producer_comunidad(): void
+    {
+        $collector = User::factory()->create(['role' => 'acopiador', 'active' => true]);
+        $producer = Producer::factory()->create(['comunidad' => 'Huata Centro']);
+
+        $this->actingAs($collector)->post(route('collector.delivery-store'), [
+            'producer_id' => $producer->id,
+            'liters' => 20,
+            'delivery_date' => now()->toDateString(),
+        ]);
+
+        $this->assertDatabaseHas('milk_deliveries', [
+            'producer_id' => $producer->id,
+            'zona' => 'Huata Centro',
         ]);
     }
 
@@ -74,6 +92,30 @@ class MilkDeliveryTest extends TestCase
         ]);
 
         $response->assertSessionHasErrors('liters');
+    }
+
+    public function test_delivery_respects_configurable_max_liters(): void
+    {
+        PlantConfig::updateOrCreate(
+            ['key' => 'litros_maximos_entrega'],
+            ['label' => 'Litros Máximos por Entrega', 'value' => '50', 'value_type' => 'number']
+        );
+        $collector = User::factory()->create(['role' => 'acopiador', 'active' => true]);
+        $producer = Producer::factory()->create();
+
+        $tooMuch = $this->actingAs($collector)->post(route('collector.delivery-store'), [
+            'producer_id' => $producer->id,
+            'liters' => 51,
+            'delivery_date' => now()->toDateString(),
+        ]);
+        $tooMuch->assertSessionHasErrors('liters');
+
+        $withinLimit = $this->actingAs($collector)->post(route('collector.delivery-store'), [
+            'producer_id' => $producer->id,
+            'liters' => 50,
+            'delivery_date' => now()->toDateString(),
+        ]);
+        $withinLimit->assertSessionDoesntHaveErrors('liters');
     }
 
     public function test_delivery_validates_temperature_range(): void
@@ -120,7 +162,7 @@ class MilkDeliveryTest extends TestCase
     {
         $collector = User::factory()->create(['role' => 'acopiador', 'active' => true]);
         $otherCollector = User::factory()->create(['role' => 'acopiador', 'active' => true]);
-        
+
         $myDelivery = MilkDelivery::factory()->create(['collector_id' => $collector->id]);
         $otherDelivery = MilkDelivery::factory()->create(['collector_id' => $otherCollector->id]);
 
@@ -135,7 +177,7 @@ class MilkDeliveryTest extends TestCase
     {
         $producer = User::factory()->create(['role' => 'productor', 'active' => true]);
         $producerModel = Producer::factory()->create(['user_id' => $producer->id]);
-        
+
         $myDelivery = MilkDelivery::factory()->create(['producer_id' => $producerModel->id]);
         $otherDelivery = MilkDelivery::factory()->create();
 

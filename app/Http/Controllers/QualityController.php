@@ -3,13 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreQualityReportRequest;
-use App\Models\Inventory;
 use App\Models\MilkDelivery;
 use App\Models\Notification;
 use App\Models\Producer;
-use App\Models\ProductionBatch;
-use App\Models\Product;
 use App\Models\QualityReport;
+use App\Services\QualityOcrService;
 use App\Services\QualityReportService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -34,7 +32,7 @@ class QualityController extends Controller
             ->where('has_quality_analysis', false)
             ->latest()->limit(12)->get();
 
-        $recentReports = QualityReport::with('milkDelivery.producer.user', 'analyst')
+        $recentReports = QualityReport::with('milkDelivery.producer.user', 'producer.user', 'analyst')
             ->latest()->limit(10)->get();
 
         $paramStats = [];
@@ -60,6 +58,7 @@ class QualityController extends Controller
         }
 
         $notifications = Notification::visibleForUser(Auth::user())->limit(4)->get();
+
         return view('quality.dashboard', compact(
             'pending', 'todayAnalyzed', 'approvedRate',
             'pendingDeliveries', 'recentReports', 'paramStats',
@@ -69,7 +68,7 @@ class QualityController extends Controller
 
     public function reports(Request $request)
     {
-        $query = QualityReport::with('milkDelivery.producer.user', 'analyst');
+        $query = QualityReport::with('milkDelivery.producer.user', 'producer.user', 'analyst');
         if ($from = $request->from) {
             $query->where('analyzed_at', '>=', $from);
         }
@@ -80,10 +79,11 @@ class QualityController extends Controller
             $query->where('result', $result);
         }
         if ($producer_id = $request->producer_id) {
-            $query->whereHas('milkDelivery', fn ($q) => $q->where('producer_id', $producer_id));
+            $query->where('producer_id', $producer_id);
         }
         $reports = $query->latest()->paginate(20)->withQueryString();
         $producers = Producer::where('status', 'activo')->with('user')->orderBy('code')->get();
+
         return view('quality.reports', compact('reports', 'producers'));
     }
 
@@ -95,33 +95,62 @@ class QualityController extends Controller
             ->where('status', '!=', 'rechazado')
             ->where('has_quality_analysis', false)
             ->latest()->limit(20)->get();
-        return view('quality.report-create', compact('delivery', 'pendingDeliveries'));
+        $producers = Producer::where('status', 'activo')->with('user')->orderBy('code')->get();
+
+        return view('quality.report-create', compact('delivery', 'pendingDeliveries', 'producers'));
     }
 
-    public function reportStore(StoreQualityReportRequest $request, QualityReportService $reportService)
+    public function reportStore(StoreQualityReportRequest $request, QualityReportService $reportService, QualityOcrService $ocrService)
     {
+        $data = $request->validated();
+        unset($data['ticket_photo']);
+
+        if ($request->hasFile('ticket_photo') && empty($data['ticket_photo_path'])) {
+            $data['ticket_photo_path'] = $ocrService->scan($request->file('ticket_photo'))['path'];
+        }
+
         try {
-            $report = $reportService->create($request->validated(), Auth::id());
-            
+            $report = $reportService->create($data, Auth::id());
+
             return redirect()
                 ->route('quality.reports')
                 ->with('success', 'Análisis LACTOMAT registrado correctamente.');
         } catch (\Exception $e) {
             return back()
                 ->withInput()
-                ->with('error', 'Error al registrar análisis: ' . $e->getMessage());
+                ->with('error', 'Error al registrar análisis: '.$e->getMessage());
         }
+    }
+
+    public function reportOcrScan(Request $request, QualityOcrService $ocrService)
+    {
+        $request->validate(['ticket_photo' => 'required|image|max:5120']);
+
+        $result = $ocrService->scan($request->file('ticket_photo'));
+
+        return response()->json([
+            'ticket_photo_path' => $result['path'],
+            'fields' => $result['fields'],
+            'ocr_available' => $result['ocr_available'],
+            'message' => $result['ocr_available']
+                ? (empty($result['fields'])
+                    ? 'No se pudieron reconocer parámetros en la imagen. Complete el formulario manualmente.'
+                    : 'Se prellenaron '.count($result['fields']).' parámetro(s) desde la foto. Revíselos antes de guardar.')
+                : 'El motor OCR no está disponible en este servidor. Complete el formulario manualmente.',
+        ]);
     }
 
     public function reportShow(QualityReport $report)
     {
-        $report->load('milkDelivery.producer.user', 'analyst');
+        $report->load('milkDelivery.producer.user', 'producer.user', 'analyst');
+
         return view('quality.report-show', compact('report'));
     }
 
     public function profile()
     {
         $user = Auth::user();
+
         return view('quality.profile', compact('user'));
     }
 
@@ -134,6 +163,7 @@ class QualityController extends Controller
             'phone' => 'nullable|string|max:20',
         ]);
         $user->update($data);
+
         return back()->with('success', 'Datos actualizados.');
     }
 }

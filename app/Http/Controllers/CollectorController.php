@@ -6,6 +6,7 @@ use App\Http\Requests\StoreMilkDeliveryRequest;
 use App\Models\CollectionRoute;
 use App\Models\MilkDelivery;
 use App\Models\Notification;
+use App\Models\Producer;
 use App\Models\RouteStop;
 use App\Services\MilkDeliveryService;
 use Carbon\Carbon;
@@ -20,7 +21,7 @@ class CollectorController extends Controller
         $today = Carbon::today();
 
         $myRoute = CollectionRoute::where('collector_id', $user->id)
-            ->where('day', $today->localeDayOfWeek === 0 ? 'Domingo' : match($today->localeDayOfWeek) {
+            ->where('day', $today->localeDayOfWeek === 0 ? 'Domingo' : match ($today->localeDayOfWeek) {
                 1 => 'Lunes', 2 => 'Martes', 3 => 'Miércoles',
                 4 => 'Jueves', 5 => 'Viernes', 6 => 'Sábado',
                 default => 'Lunes'
@@ -59,6 +60,7 @@ class CollectorController extends Controller
         $routes = CollectionRoute::where('collector_id', $user->id)
             ->with('stops.producer.user')
             ->latest()->paginate(10);
+
         return view('collector.routes', compact('routes'));
     }
 
@@ -68,6 +70,7 @@ class CollectorController extends Controller
             abort(403);
         }
         $route->load('stops.producer.user', 'milkDeliveries.producer.user');
+
         return view('collector.route-show', compact('route'));
     }
 
@@ -81,10 +84,11 @@ class CollectorController extends Controller
             'estimated_liters' => 'nullable|numeric|min:0',
         ]);
         $update = $data;
-        if ($data['status'] === 'visitado' && !$stop->visited_at) {
+        if ($data['status'] === 'visitado' && ! $stop->visited_at) {
             $update['visited_at'] = now();
         }
         $stop->update($update);
+
         return back()->with('success', 'Parada actualizada.');
     }
 
@@ -107,6 +111,7 @@ class CollectorController extends Controller
             'liters' => $deliveries->total() > 0 ? (clone $query)->sum('liters') : 0,
             'amount' => $deliveries->total() > 0 ? (clone $query)->sum('total_amount') : 0,
         ];
+
         return view('collector.deliveries', compact('deliveries', 'totals'));
     }
 
@@ -115,28 +120,105 @@ class CollectorController extends Controller
         $route_stop_id = $request->route_stop_id;
         $collection_route_id = $request->collection_route_id;
         $routeStop = RouteStop::with('producer.user', 'collectionRoute')->find($route_stop_id);
-        $producers = \App\Models\Producer::where('status', 'activo')->with('user')->orderBy('code')->get();
+        $producers = $this->myProducers()->sortBy('code')->values();
+        if ($routeStop?->producer && ! $producers->contains('id', $routeStop->producer->id)) {
+            $producers->push($routeStop->producer);
+        }
+
         return view('collector.delivery-create', compact('routeStop', 'producers', 'route_stop_id', 'collection_route_id'));
+    }
+
+    /**
+     * Productores que este acopiador puede atender: los de sus rutas asignadas o,
+     * si no tiene ninguna ruta, los productores activos de su misma comunidad.
+     */
+    private function myProducers()
+    {
+        $user = Auth::user();
+
+        $viaRoutes = RouteStop::whereHas('collectionRoute', fn ($q) => $q->where('collector_id', $user->id))
+            ->with('producer.user')
+            ->get()
+            ->pluck('producer')
+            ->filter()
+            ->unique('id');
+
+        if ($viaRoutes->isNotEmpty()) {
+            return $viaRoutes;
+        }
+
+        if (! $user->comunidad) {
+            return collect();
+        }
+
+        return Producer::where('status', 'activo')->where('comunidad', $user->comunidad)->with('user')->get();
     }
 
     public function deliveryStore(StoreMilkDeliveryRequest $request, MilkDeliveryService $deliveryService)
     {
         try {
             $delivery = $deliveryService->create($request->validated(), Auth::id());
-            
+
             return redirect()
                 ->route('collector.deliveries')
                 ->with('success', "Entrega de {$delivery->liters} L registrada correctamente.");
         } catch (\Exception $e) {
             return back()
                 ->withInput()
-                ->with('error', 'Error al registrar entrega: ' . $e->getMessage());
+                ->with('error', 'Error al registrar entrega: '.$e->getMessage());
         }
+    }
+
+    public function producers()
+    {
+        $today = Carbon::today();
+        $startMonth = $today->copy()->startOfMonth();
+
+        $producers = $this->myProducers()
+            ->map(function ($producer) use ($startMonth, $today) {
+                $producer->month_liters = $producer->getTotalLitersByPeriod($startMonth, $today);
+
+                return $producer;
+            })
+            ->sortBy(fn ($p) => $p->user->name ?? '');
+
+        return view('collector.producers', compact('producers'));
+    }
+
+    public function journal()
+    {
+        $user = Auth::user();
+        $today = Carbon::today();
+
+        $myRoute = CollectionRoute::where('collector_id', $user->id)
+            ->where('day', $today->localeDayOfWeek === 0 ? 'Domingo' : match ($today->localeDayOfWeek) {
+                1 => 'Lunes', 2 => 'Martes', 3 => 'Miércoles',
+                4 => 'Jueves', 5 => 'Viernes', 6 => 'Sábado',
+                default => 'Lunes'
+            })
+            ->whereIn('status', ['planeada', 'en_curso'])
+            ->with('stops.producer.user')
+            ->first();
+
+        $todayDeliveries = MilkDelivery::where('collector_id', $user->id)
+            ->where('delivery_date', $today)
+            ->with('producer.user', 'qualityReport')
+            ->latest()
+            ->get();
+
+        $totals = [
+            'liters' => $todayDeliveries->sum('liters'),
+            'amount' => $todayDeliveries->sum('total_amount'),
+            'count' => $todayDeliveries->count(),
+        ];
+
+        return view('collector.journal', compact('myRoute', 'todayDeliveries', 'totals'));
     }
 
     public function profile()
     {
         $user = Auth::user();
+
         return view('collector.profile', compact('user'));
     }
 
@@ -147,9 +229,9 @@ class CollectorController extends Controller
             'name' => 'required|string|max:100',
             'lastname' => 'nullable|string|max:100',
             'phone' => 'nullable|string|max:20',
-            'vehicle_plate' => 'nullable|string|max:10',
         ]);
         $user->update($data);
+
         return back()->with('success', 'Datos actualizados.');
     }
 }

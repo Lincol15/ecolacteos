@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Detalle Reporte Calidad - VACA SYS')
+@section('title', 'Detalle Reporte Calidad - Ecolácteos Huata')
 @section('page-title', 'Reporte de Análisis #' . ($report->id ?? ''))
 @section('page-subtitle', 'Resultados detallados del análisis LACTOMAT')
 
@@ -17,13 +17,25 @@
         <div class="stat-label">Código Muestra</div>
         <div class="stat-value green" style="font-size:22px">{{ $report->sample_code ?? 'N/A' }}</div>
     </div>
-    <div class="stat-card {{ $report->result === 'aprobado' ? 'green' : ($report->result === 'rechazado' ? 'red' : 'amber') }}">
-        <div class="stat-icon-wrap {{ $report->result === 'aprobado' ? 'green' : ($report->result === 'rechazado' ? 'red' : 'amber') }}">
-            {{ $report->result === 'aprobado' ? '✅' : ($report->result === 'rechazado' ? '❌' : '👁️') }}
-        </div>
+    @php
+        $resultColor = match($report->result) {
+            'aprobado', 'aceptable' => 'green',
+            'rechazado' => 'red',
+            'observado' => 'amber',
+            default => 'gray',
+        };
+        $resultIcon = match($report->result) {
+            'aprobado', 'aceptable' => '✅',
+            'rechazado' => '❌',
+            'observado' => '👁️',
+            default => '⏳',
+        };
+    @endphp
+    <div class="stat-card {{ $resultColor }}">
+        <div class="stat-icon-wrap {{ $resultColor }}">{{ $resultIcon }}</div>
         <div class="stat-label">Resultado</div>
         <div>
-            <span class="badge {{ $report->result === 'aprobado' ? 'badge-green' : ($report->result === 'rechazado' ? 'badge-red' : ($report->result === 'aceptable' ? 'badge-blue' : 'badge-amber')) }}" style="font-size:15px;padding:8px 16px">
+            <span class="badge badge-{{ $resultColor }}" style="font-size:15px;padding:8px 16px">
                 {{ strtoupper($report->result) }}
             </span>
         </div>
@@ -41,6 +53,7 @@
 </div>
 
 <div class="grid-2">
+    @php $producer = $report->producer ?? $report->milkDelivery?->producer; @endphp
     <div class="panel">
         <div class="panel-header">
             <div class="panel-title">👨‍🌾 Información del Productor</div>
@@ -49,19 +62,19 @@
             <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px">
                 <div>
                     <div style="font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase">Nombre</div>
-                    <div style="font-weight:700;font-size:15px">{{ $report->milkDelivery?->producer?->user?->fullname ?? 'N/A' }}</div>
+                    <div style="font-weight:700;font-size:15px">{{ $producer?->user?->fullname ?? 'N/A' }}</div>
                 </div>
                 <div>
                     <div style="font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase">Código</div>
-                    <div style="font-weight:700">{{ $report->milkDelivery?->producer?->code ?? '-' }}</div>
+                    <div style="font-weight:700">{{ $producer?->code ?? '-' }}</div>
                 </div>
                 <div>
                     <div style="font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase">Teléfono</div>
-                    <div>{{ $report->milkDelivery?->producer?->user?->phone ?? '-' }}</div>
+                    <div>{{ $producer?->user?->phone ?? '-' }}</div>
                 </div>
                 <div>
-                    <div style="font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase">Ubicación</div>
-                    <div>{{ $report->milkDelivery?->producer?->location ?? '-' }}</div>
+                    <div style="font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase">Comunidad</div>
+                    <div>{{ $producer?->comunidad ?? '-' }}</div>
                 </div>
             </div>
         </div>
@@ -72,6 +85,7 @@
             <div class="panel-title">🚛 Entrega Asociada</div>
         </div>
         <div class="panel-body">
+            @if($report->milkDelivery)
             <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px">
                 <div>
                     <div style="font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase">Entrega #</div>
@@ -91,7 +105,7 @@
                 </div>
                 <div>
                     <div style="font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase">Temperatura</div>
-                    <div>{{ $report->milkDelivery?->temperature ?? '-' }} °C</div>
+                    <div>{{ $report->temperatura ?? $report->milkDelivery?->temperature ?? '-' }} °C</div>
                 </div>
                 <div>
                     <div style="font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase">Estado Entrega</div>
@@ -99,7 +113,19 @@
                         {{ $report->milkDelivery?->status ?? '-' }}
                     </span>
                 </div>
+                <div>
+                    <div style="font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase">Origen de Datos</div>
+                    <span class="badge badge-gray">{{ \App\Models\QualityReport::ORIGENES_DATOS[$report->origen_datos] ?? $report->origen_datos }}</span>
+                </div>
             </div>
+            @else
+            <div class="empty" style="padding:24px 0">
+                <div class="empty-icon" style="font-size:36px">🔬</div>
+                <p>Análisis directo sin entrega de leche asociada (id_registro_acopio opcional).</p>
+                <p style="margin-top:8px">Temperatura registrada: <strong>{{ $report->temperatura ?? '-' }} °C</strong></p>
+                <span class="badge badge-gray" style="margin-top:8px">{{ \App\Models\QualityReport::ORIGENES_DATOS[$report->origen_datos] ?? $report->origen_datos }}</span>
+            </div>
+            @endif
         </div>
     </div>
 </div>

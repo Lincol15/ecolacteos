@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Mi Perfil - VACA SYS')
+@section('title', 'Mi Perfil - Ecolácteos Huata')
 @section('page-title', 'Mi Perfil')
 @section('page-subtitle', 'Actualiza tus datos personales y de vehículo')
 
@@ -40,8 +40,14 @@
                         <input type="tel" name="phone" value="{{ old('phone', auth()->user()->phone) }}" class="form-input" placeholder="+51 987 654 321">
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Placa de Vehículo</label>
-                        <input type="text" name="vehicle_plate" value="{{ old('vehicle_plate', auth()->user()->vehicle_plate ?? '') }}" class="form-input" placeholder="ABC-123">
+                        <label class="form-label">Vehículo Asignado</label>
+                        <input type="text" value="{{ auth()->user()->vehiculo ?? 'Sin asignar' }}" class="form-input" disabled style="background:#f1f5f9;cursor:not-allowed">
+                        <small class="form-hint">Lo asigna el administrador al crear tu usuario.</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Comunidad Asignada</label>
+                        <input type="text" value="{{ auth()->user()->comunidad ?? 'Sin asignar' }}" class="form-input" disabled style="background:#f1f5f9;cursor:not-allowed">
+                        <small class="form-hint">Lo asigna el administrador al crear tu usuario.</small>
                     </div>
                     <div class="form-group" style="grid-column:1 / -1">
                         <label class="form-label">Correo Electrónico</label>

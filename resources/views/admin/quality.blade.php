@@ -18,7 +18,7 @@
     </div>
     <div class="stat-card cyan">
         <div class="stat-label">Puntaje Promedio</div>
-        <div class="stat-value cyan">{{ $reports->count() ? number_format($reports->avg('score'), 1) : 0 }}/100</div>
+        <div class="stat-value cyan">{{ $reports->count() ? number_format($reports->getCollection()->avg(fn($r) => $r->qualityScore()), 1) : 0 }}/100</div>
         <div class="stat-icon-wrap cyan">📊</div>
     </div>
     <div class="stat-card amber">
@@ -54,6 +54,7 @@
                     <option value="aprobado" {{ request('result') == 'aprobado' ? 'selected' : '' }}>Aprobado</option>
                     <option value="observado" {{ request('result') == 'observado' ? 'selected' : '' }}>Observado</option>
                     <option value="rechazado" {{ request('result') == 'rechazado' ? 'selected' : '' }}>Rechazado</option>
+                    <option value="pendiente" {{ request('result') == 'pendiente' ? 'selected' : '' }}>Pendiente</option>
                 </select>
             </div>
             <div class="form-group">
@@ -92,36 +93,38 @@
                 </thead>
                 <tbody>
                     @forelse($reports as $report)
+                    @php $rowProducer = $report->producer ?? $report->milkDelivery?->producer; @endphp
                     <tr>
                         <td>
-                            <strong>{{ $report->analysis_date ? \Carbon\Carbon::parse($report->analysis_date)->format('d/m/Y') : '—' }}</strong>
+                            <strong>{{ $report->analyzed_at ? $report->analyzed_at->format('d/m/Y') : '—' }}</strong>
                             <div style="font-size:11px; color:var(--text-light);">
-                                {{ $report->analysis_date ? \Carbon\Carbon::parse($report->analysis_date)->format('H:i') : '' }}
+                                {{ $report->analyzed_at ? $report->analyzed_at->format('H:i') : '' }}
                             </div>
                         </td>
-                        <td><code class="badge badge-blue">#{{ $report->delivery_id ?? '—' }}</code></td>
+                        <td><code class="badge badge-blue">{{ $report->milk_delivery_id ? '#' . $report->milk_delivery_id : 'Directo' }}</code></td>
                         <td>
-                            <strong>{{ $report->delivery->producer->farm_name ?? '—' }}</strong>
-                            <div style="font-size:11px; color:var(--text-light);">{{ $report->delivery->producer->code ?? '' }}</div>
+                            <strong>{{ $rowProducer?->user?->fullname ?? '—' }}</strong>
+                            <div style="font-size:11px; color:var(--text-light);">{{ $rowProducer?->code ?? '' }}</div>
                         </td>
                         <td>
                             <span class="badge badge-{{ match($report->result) {
-                                'aprobado' => 'green',
+                                'aprobado', 'aceptable' => 'green',
                                 'observado' => 'amber',
                                 'rechazado' => 'red',
                                 default => 'gray'
                             } }}">
                                 {{ match($report->result) {
                                     'aprobado' => '✅ Aprobado',
+                                    'aceptable' => '👍 Aceptable',
                                     'observado' => '⚠️ Observado',
                                     'rechazado' => '❌ Rechazado',
-                                    default => ucfirst($report->result)
+                                    default => '⏳ Pendiente'
                                 } }}
                             </span>
                         </td>
                         <td>
                             @php
-                                $s = $report->score ?? 0;
+                                $s = $report->qualityScore();
                                 $sColor = $s >= 85 ? 'green' : ($s >= 70 ? 'amber' : 'red');
                             @endphp
                             <span class="badge badge-{{ $sColor }}">
@@ -133,7 +136,7 @@
                         </td>
                         <td>{{ $report->analyst->name ?? '—' }} {{ $report->analyst->lastname ?? '' }}</td>
                         <td>
-                            <button class="btn btn-info btn-sm">🔍 Ver</button>
+                            <a href="{{ route('quality.report-show', $report->id) }}" class="btn btn-info btn-sm">🔍 Ver</a>
                         </td>
                     </tr>
                     @empty

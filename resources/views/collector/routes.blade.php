@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Mis Rutas - VACA SYS')
+@section('title', 'Mis Rutas - Ecolácteos Huata')
 @section('page-title', 'Mis Rutas de Recolección')
 @section('page-subtitle', 'Rutas asignadas y paradas programadas')
 
@@ -61,14 +61,14 @@
                             <span style="font-weight:800;color:#0891b2;font-size:17px">{{ count($r->stops ?? []) }}</span>
                             <div style="flex:1;min-width:80px">
                                 <div class="progress-wrap" style="height:6px">
-                                    <div class="progress blue" style="width:{{ count($r->stops ?? []) > 0 ? ((collect($r->stops ?? [])->filter(fn($s) => $s->status === 'completado')->count() / count($r->stops ?? [])) * 100 : 0 }}%"></div>
+                                    <div class="progress blue" style="width:{{ count($r->stops ?? []) > 0 ? (collect($r->stops ?? [])->filter(fn($s) => $s->status === 'completado')->count() / count($r->stops ?? [])) * 100 : 0 }}%"></div>
                                 </div>
                             </div>
                         </div>
                     </td>
                     <td>
                         <span class="badge {{ ($r->status ?? 'pendiente') === 'completado' ? 'badge-green' : (($r->status ?? 'pendiente') === 'en_curso' ? 'badge-blue' : 'badge-amber') }}">
-                            {{ ($r->status ?? 'pendiente') === 'completado' ? '✅ Completada' : (($r->status ?? 'pendiente') === 'en_curso' ? '🚛 En Curso' : '⏳ Pendiente' }}
+                            {{ ($r->status ?? 'pendiente') === 'completado' ? '✅ Completada' : (($r->status ?? 'pendiente') === 'en_curso' ? '🚛 En Curso' : '⏳ Pendiente') }}
                         </span>
                     </td>
                     <td>

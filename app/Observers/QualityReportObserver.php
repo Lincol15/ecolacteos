@@ -23,7 +23,7 @@ class QualityReportObserver
         }
 
         // Establecer analyzed_at si no está presente
-        if (!isset($report->analyzed_at)) {
+        if (! isset($report->analyzed_at)) {
             $report->analyzed_at = now();
         }
 
@@ -42,8 +42,8 @@ class QualityReportObserver
      */
     public function created(QualityReport $report): void
     {
-        // Actualizar la entrega asociada
-        $report->milkDelivery->update([
+        // Actualizar la entrega asociada (id_registro_acopio es opcional)
+        $report->milkDelivery?->update([
             'has_quality_analysis' => true,
             'status' => $report->result === 'rechazado' ? 'rechazado' : 'analizado',
         ]);
@@ -56,7 +56,7 @@ class QualityReportObserver
     {
         // Si cambia el resultado, actualizar la entrega
         if ($report->isDirty('result')) {
-            $report->milkDelivery->update([
+            $report->milkDelivery?->update([
                 'status' => $report->result === 'rechazado' ? 'rechazado' : 'analizado',
             ]);
         }
@@ -72,8 +72,8 @@ class QualityReportObserver
      */
     public function deleting(QualityReport $report): void
     {
-        // Actualizar la entrega asociada al eliminar el reporte
-        $report->milkDelivery->update([
+        // Actualizar la entrega asociada al eliminar el reporte (si existe)
+        $report->milkDelivery?->update([
             'has_quality_analysis' => false,
             'status' => 'registrado',
         ]);

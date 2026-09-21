@@ -11,9 +11,13 @@ class QualityReport extends Model
 
     protected $fillable = [
         'milk_delivery_id',
+        'producer_id',
         'analyst_id',
         'analyzer_model',
+        'origen_datos',
+        'ticket_photo_path',
         'sample_code',
+        'temperatura',
         'grasa_pct',
         'proteina_pct',
         'lactosa_pct',
@@ -33,6 +37,7 @@ class QualityReport extends Model
     protected function casts(): array
     {
         return [
+            'temperatura' => 'decimal:2',
             'grasa_pct' => 'decimal:2',
             'proteina_pct' => 'decimal:2',
             'lactosa_pct' => 'decimal:2',
@@ -46,10 +51,17 @@ class QualityReport extends Model
     }
 
     public const RESULTS = [
-        'aprobado' => 'Aprobado',
-        'rechazado' => 'Rechazado',
-        'aceptable' => 'Aceptable',
+        'aprobado' => 'Aprobado (Apto)',
+        'rechazado' => 'Rechazado (No Apto)',
+        'aceptable' => 'Aceptable (Apto)',
         'observado' => 'Observado',
+        'pendiente' => 'Pendiente',
+    ];
+
+    public const ORIGENES_DATOS = [
+        'manual' => 'Manual',
+        'ocr' => 'OCR',
+        'ocr_corregido' => 'OCR Corregido',
     ];
 
     public const REJECTION_REASONS = [
@@ -86,15 +98,16 @@ class QualityReport extends Model
 
     public function producer()
     {
-        return $this->hasOneThrough(Producer::class, MilkDelivery::class);
+        return $this->belongsTo(Producer::class);
     }
 
     public function isParamInRange(string $param): bool
     {
-        if (!isset(self::QUALITY_PARAMS[$param]) || !isset($this->{$param})) {
+        if (! isset(self::QUALITY_PARAMS[$param]) || ! isset($this->{$param})) {
             return true;
         }
         $spec = self::QUALITY_PARAMS[$param];
+
         return $this->{$param} >= $spec['min'] && $this->{$param} <= $spec['max'];
     }
 
@@ -111,6 +124,7 @@ class QualityReport extends Model
                 }
             }
         }
+
         return $count > 0 ? round(($inRange / $count) * 100, 1) : 0;
     }
 }

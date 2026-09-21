@@ -4,6 +4,7 @@
 @section('page-subtitle', 'Registro y control de entregas de leche de productores')
 
 @section('top-actions')
+    <a href="{{ route('admin.deliveries-create') }}" class="btn btn-primary">➕ Registrar Entrega</a>
     <a href="{{ route('admin.deliveries') }}" class="btn btn-accent">
         📥 Exportar Excel
     </a>
@@ -51,10 +52,27 @@
                 <label class="form-label">Estado</label>
                 <select name="status" class="form-select" onchange="this.form.submit()">
                     <option value="">Todos</option>
-                    <option value="recibido" {{ request('status') == 'recibido' ? 'selected' : '' }}>Recibido</option>
-                    <option value="procesando" {{ request('status') == 'procesando' ? 'selected' : '' }}>Procesando</option>
+                    <option value="registrado" {{ request('status') == 'registrado' ? 'selected' : '' }}>Registrado</option>
                     <option value="aceptado" {{ request('status') == 'aceptado' ? 'selected' : '' }}>Aceptado</option>
+                    <option value="analizado" {{ request('status') == 'analizado' ? 'selected' : '' }}>Analizado</option>
                     <option value="rechazado" {{ request('status') == 'rechazado' ? 'selected' : '' }}>Rechazado</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Recibido</label>
+                <select name="recibido" class="form-select" onchange="this.form.submit()">
+                    <option value="">Todos</option>
+                    <option value="1" {{ request('recibido') === '1' ? 'selected' : '' }}>Recibido en Planta</option>
+                    <option value="0" {{ request('recibido') === '0' ? 'selected' : '' }}>En Tránsito</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Zona</label>
+                <select name="zona" class="form-select" onchange="this.form.submit()">
+                    <option value="">Todas</option>
+                    @foreach($zones ?? [] as $z)
+                    <option value="{{ $z }}" {{ request('zona') == $z ? 'selected' : '' }}>{{ $z }}</option>
+                    @endforeach
                 </select>
             </div>
             <div class="form-group">
@@ -63,7 +81,19 @@
                     <option value="">Todos</option>
                     @forelse($producers ?? [] as $prod)
                     <option value="{{ $prod->id }}" {{ request('producer_id') == $prod->id ? 'selected' : '' }}>
-                        {{ $prod->code }} - {{ $prod->farm_name }}
+                        {{ $prod->code }} - {{ $prod->user?->fullname }}
+                    </option>
+                    @empty
+                    @endforelse
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Acopiador</label>
+                <select name="collector_id" class="form-select" onchange="this.form.submit()">
+                    <option value="">Todos</option>
+                    @forelse($collectors ?? [] as $c)
+                    <option value="{{ $c->id }}" {{ request('collector_id') == $c->id ? 'selected' : '' }}>
+                        {{ $c->fullname }}
                     </option>
                     @empty
                     @endforelse
@@ -84,14 +114,15 @@
                     <tr>
                         <th>Fecha</th>
                         <th>Productor</th>
+                        <th>Zona</th>
                         <th>Litros</th>
                         <th>Temp.</th>
                         <th>Precio/L</th>
                         <th>Total</th>
+                        <th>Recibido</th>
                         <th>Estado</th>
                         <th>Calidad</th>
                         <th>Acopiador</th>
-                        <th>Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -104,9 +135,10 @@
                             </div>
                         </td>
                         <td>
-                            <strong>{{ $delivery->producer->farm_name ?? '—' }}</strong>
+                            <strong>{{ $delivery->producer?->user?->fullname ?? '—' }}</strong>
                             <div style="font-size:11px; color:var(--text-light);">{{ $delivery->producer->code ?? '' }}</div>
                         </td>
+                        <td>{{ $delivery->zona ?? '—' }}</td>
                         <td><strong>{{ number_format($delivery->liters, 1) }} L</strong></td>
                         <td>
                             <span class="badge {{ ($delivery->temperature ?? 0) > 8 ? 'badge-amber' : 'badge-green' }}">
@@ -116,39 +148,39 @@
                         <td>S/{{ number_format($delivery->price_per_liter, 3) }}</td>
                         <td><strong>S/{{ number_format($delivery->total_amount, 2) }}</strong></td>
                         <td>
+                            <span class="badge badge-{{ $delivery->recibido ? 'green' : 'amber' }}">
+                                {{ $delivery->recibido ? '📥 Recibido' : '🚚 En Tránsito' }}
+                            </span>
+                        </td>
+                        <td>
                             <span class="badge badge-{{ match($delivery->status) {
-                                'recibido' => 'blue',
-                                'procesando' => 'amber',
                                 'aceptado' => 'green',
+                                'analizado' => 'blue',
                                 'rechazado' => 'red',
                                 default => 'gray'
                             } }}">
                                 {{ match($delivery->status) {
-                                    'recibido' => '📥 Recibido',
-                                    'procesando' => '⏳ Procesando',
                                     'aceptado' => '✅ Aceptado',
+                                    'analizado' => '🧪 Analizado',
                                     'rechazado' => '❌ Rechazado',
-                                    default => ucfirst($delivery->status)
+                                    default => '📝 Registrado'
                                 } }}
                             </span>
                         </td>
                         <td>
-                            @if(isset($delivery->qualityReport))
-                                <span class="badge badge-{{ $delivery->qualityReport->result == 'aprobado' ? 'green' : ($delivery->qualityReport->result == 'rechazado' ? 'red' : 'amber') }}">
-                                    {{ $delivery->qualityReport->result == 'aprobado' ? '✅ Aprob' : ($delivery->qualityReport->result == 'rechazado' ? '❌ Rech' : '⚠️ Obs') }} {{ $delivery->qualityReport->score }}/100
+                            @if($delivery->qualityReport)
+                                <span class="badge badge-{{ in_array($delivery->qualityReport->result, ['aprobado','aceptable']) ? 'green' : ($delivery->qualityReport->result == 'rechazado' ? 'red' : 'amber') }}">
+                                    {{ in_array($delivery->qualityReport->result, ['aprobado','aceptable']) ? '✅ Aprob' : ($delivery->qualityReport->result == 'rechazado' ? '❌ Rech' : '⚠️ Obs') }} {{ $delivery->qualityReport->qualityScore() }}/100
                                 </span>
                             @else
                                 <span class="badge badge-gray">⏳ Pendiente</span>
                             @endif
                         </td>
                         <td>{{ $delivery->collector->name ?? '—' }} {{ $delivery->collector->lastname ?? '' }}</td>
-                        <td>
-                            <button class="btn btn-info btn-sm">🔍 Detalle</button>
-                        </td>
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="10">
+                        <td colspan="11">
                             <div class="empty">
                                 <div class="empty-icon">🚛</div>
                                 <h3>No hay entregas registradas</h3>

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\MilkDelivery;
 use App\Models\PlantConfig;
+use App\Models\Producer;
 use App\Models\RouteStop;
 use Illuminate\Support\Facades\DB;
 
@@ -18,10 +19,14 @@ class MilkDeliveryService
             // Obtener precio configurado si no se proporciona
             $price = $data['price_per_liter'] ?? PlantConfig::getValue('precio_litro_leche', 1.70);
 
+            // La zona de la entrega es siempre la comunidad del productor (no se pide manualmente).
+            $zona = Producer::where('id', $data['producer_id'])->value('comunidad');
+
             // Crear la entrega
             $delivery = MilkDelivery::create([
                 ...$data,
                 'collector_id' => $collectorId,
+                'zona' => $zona,
                 'price_per_liter' => $price,
                 'total_amount' => round($data['liters'] * $price, 2),
                 'delivery_time' => now(),
@@ -55,6 +60,7 @@ class MilkDeliveryService
             }
 
             $delivery->update($data);
+
             return $delivery->fresh();
         });
     }
@@ -83,8 +89,8 @@ class MilkDeliveryService
         return DB::transaction(function () use ($delivery, $reason, $approverId) {
             $delivery->update([
                 'status' => 'rechazado',
-                'observations' => ($delivery->observations ? $delivery->observations . '\n\n' : '')
-                    . 'RECHAZADO: ' . $reason,
+                'observations' => ($delivery->observations ? $delivery->observations.'\n\n' : '')
+                    .'RECHAZADO: '.$reason,
                 'approved_by' => $approverId,
                 'approved_at' => now(),
             ]);

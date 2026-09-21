@@ -23,7 +23,7 @@
     </div>
     <div class="stat-card amber">
         <div class="stat-label">Dist. Estimada</div>
-        <div class="stat-value amber">{{ number_format($routes->sum('estimated_distance_km'), 1 }} km</div>
+        <div class="stat-value amber">{{ number_format($routes->sum('estimated_distance_km'), 1) }} km</div>
         <div class="stat-icon-wrap amber">🛣️</div>
     </div>
     <div class="stat-card cyan">

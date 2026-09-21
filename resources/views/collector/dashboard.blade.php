@@ -1,8 +1,8 @@
 @extends('layouts.app')
 
-@section('title', 'Dashboard Acopiador - VACA SYS')
+@section('title', 'Dashboard Acopiador - Ecolácteos Huata')
 @section('page-title', 'Panel de Acopiador')
-@section('page-subtitle', 'Rutas, entregas y seguimiento de recolección de leche')
+@section('page-subtitle', 'Comunidad: ' . (auth()->user()->comunidad ?? 'Sin asignar') . ' · Vehículo: ' . (auth()->user()->vehiculo ?? 'Sin asignar'))
 
 @section('top-actions')
     <a href="{{ route('collector.delivery-create') }}" class="btn btn-primary">
@@ -55,7 +55,7 @@
                     </span>
                 </div>
                 <div class="progress-wrap" style="height:8px;margin-top:10px">
-                    <div class="progress blue" style="width:{{ count($myRoute->stops ?? []) > 0 ? ((collect($myRoute->stops ?? [])->filter(fn($s) => $s->status === 'completado')->count() / count($myRoute->stops ?? [])) * 100 : 0 }}%"></div>
+                    <div class="progress blue" style="width:{{ count($myRoute->stops ?? []) > 0 ? (collect($myRoute->stops ?? [])->filter(fn($s) => $s->status === 'completado')->count() / count($myRoute->stops ?? [])) * 100 : 0 }}%"></div>
                 </div>
             </div>
 

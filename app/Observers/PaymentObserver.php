@@ -24,12 +24,13 @@ class PaymentObserver
         }
 
         // Calcular total_amount si no está establecido
-        if (!isset($payment->total_amount) || $payment->total_amount === 0) {
+        if (! isset($payment->total_amount) || $payment->total_amount === 0) {
             $payment->total_amount = round(
-                $payment->base_amount 
-                + $payment->quality_bonus 
-                + $payment->production_bonus 
-                - $payment->deductions,
+                $payment->base_amount
+                + $payment->quality_bonus
+                + $payment->production_bonus
+                - $payment->deductions
+                - ($payment->llevado_a_planta ?? 0),
                 2
             );
         }
@@ -41,12 +42,13 @@ class PaymentObserver
     public function updating(Payment $payment): void
     {
         // Recalcular total si cambian los componentes
-        if ($payment->isDirty(['base_amount', 'quality_bonus', 'production_bonus', 'deductions'])) {
+        if ($payment->isDirty(['base_amount', 'quality_bonus', 'production_bonus', 'deductions', 'llevado_a_planta'])) {
             $payment->total_amount = round(
-                $payment->base_amount 
-                + $payment->quality_bonus 
-                + $payment->production_bonus 
-                - $payment->deductions,
+                $payment->base_amount
+                + $payment->quality_bonus
+                + $payment->production_bonus
+                - $payment->deductions
+                - ($payment->llevado_a_planta ?? 0),
                 2
             );
         }

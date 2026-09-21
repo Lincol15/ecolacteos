@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Inventario - VACA SYS')
+@section('title', 'Inventario - Ecolácteos Huata')
 @section('page-title', 'Gestión de Inventario')
 @section('page-subtitle', 'Control de stock y movimientos de productos terminados')
 

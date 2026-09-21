@@ -15,6 +15,7 @@ class Producer extends Model
         'code',
         'farm_name',
         'zone',
+        'comunidad',
         'district',
         'province',
         'region',
@@ -40,7 +41,6 @@ class Producer extends Model
     public const STATUS = [
         'activo' => 'Activo',
         'inactivo' => 'Inactivo',
-        'suspendido' => 'Suspendido',
     ];
 
     public function getStatusLabelAttribute(): string
@@ -51,6 +51,7 @@ class Producer extends Model
     public function getFullAddressAttribute(): string
     {
         $parts = array_filter([$this->zone, $this->district, $this->province, $this->region]);
+
         return implode(', ', $parts);
     }
 
@@ -82,6 +83,11 @@ class Producer extends Model
     public function routeStops()
     {
         return $this->hasMany(RouteStop::class);
+    }
+
+    public function sanctions()
+    {
+        return $this->hasMany(Sanction::class);
     }
 
     public function collectionRoutes()

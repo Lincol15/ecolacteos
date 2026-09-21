@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Mis Entregas - VACA SYS')
+@section('title', 'Mis Entregas - Ecolácteos Huata')
 @section('page-title', 'Mis Entregas de Leche')
 @section('page-subtitle', 'Historial de entregas registradas como acopiador')
 
@@ -16,7 +16,7 @@
         <div class="panel-title">🔍 Filtros de Búsqueda</div>
     </div>
     <div class="panel-body">
-        <form method="GET" action="{{ route('collector.deliveries') }}" class="form-grid">
+        <form method="GET" action="{{ route('collector.deliveries') }}" class="filters">
             <div class="form-group">
                 <label class="form-label">Desde</label>
                 <input type="date" name="from" value="{{ request('from') }}" class="form-input">

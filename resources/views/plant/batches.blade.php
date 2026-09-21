@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Lotes de Producción - VACA SYS')
+@section('title', 'Lotes de Producción - Ecolácteos Huata')
 @section('page-title', 'Gestión de Lotes')
 @section('page-subtitle', 'Control y seguimiento de lotes de producción láctea')
 

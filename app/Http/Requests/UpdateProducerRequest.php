@@ -16,17 +16,17 @@ class UpdateProducerRequest extends FormRequest
         $producerId = $this->route('producer')->id ?? $this->route('producer');
 
         return [
-            'code' => 'required|string|max:20|unique:producers,code,' . $producerId,
+            'code' => 'required|string|max:20|unique:producers,code,'.$producerId,
             'farm_name' => 'nullable|string|max:150',
+            'comunidad' => 'required|string|max:150',
             'zone' => 'nullable|string|max:100',
             'district' => 'nullable|string|max:100',
             'province' => 'nullable|string|max:100',
             'region' => 'nullable|string|max:100',
-            'latitude' => 'nullable|numeric|between:-90,90',
-            'longitude' => 'nullable|numeric|between:-180,180',
             'cows_count' => 'nullable|integer|min:0|max:1000',
             'daily_avg_liters' => 'nullable|numeric|min:0|max:10000',
-            'status' => 'required|in:activo,inactivo,suspendido',
+            'registration_date' => 'nullable|date',
+            'status' => 'required|in:activo,inactivo',
             'notes' => 'nullable|string|max:2000',
         ];
     }

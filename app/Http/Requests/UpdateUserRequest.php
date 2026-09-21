@@ -18,10 +18,12 @@ class UpdateUserRequest extends FormRequest
         return [
             'name' => 'required|string|max:100',
             'lastname' => 'nullable|string|max:100',
-            'dni' => 'required|string|max:12|unique:users,dni,' . $userId,
-            'email' => 'required|email|max:150|unique:users,email,' . $userId,
+            'dni' => 'required|string|max:12|unique:users,dni,'.$userId,
+            'email' => 'required|email|max:150|unique:users,email,'.$userId,
             'phone' => 'nullable|string|max:20',
             'address' => 'nullable|string|max:255',
+            'comunidad' => 'nullable|string|max:150',
+            'vehiculo' => 'nullable|string|max:20',
             'role' => 'required|in:admin,gerente,acopiador,control_calidad,trabajador_planta,productor',
             'active' => 'nullable|boolean',
         ];

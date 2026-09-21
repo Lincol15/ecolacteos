@@ -20,6 +20,8 @@ class StoreUserRequest extends FormRequest
             'email' => 'required|email|max:150|unique:users,email',
             'phone' => 'nullable|string|max:20',
             'address' => 'nullable|string|max:255',
+            'comunidad' => 'nullable|string|max:150',
+            'vehiculo' => 'nullable|string|max:20',
             'role' => 'required|in:admin,gerente,acopiador,control_calidad,trabajador_planta,productor',
             'password' => 'required|string|min:6|confirmed',
             'active' => 'nullable|boolean',

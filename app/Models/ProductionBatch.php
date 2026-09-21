@@ -12,6 +12,7 @@ class ProductionBatch extends Model
 
     protected $fillable = [
         'batch_number',
+        'group_number',
         'product_id',
         'input_milk_liters',
         'output_units',

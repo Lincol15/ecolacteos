@@ -4,24 +4,24 @@
 @section('page-subtitle', 'Seguimiento y atención de reclamos de productores')
 
 @section('top-actions')
-    <span class="badge badge-red">{{ $complaints->where('status', 'pendiente')->count() }} Pendientes</span>
+    <span class="badge badge-red">{{ $complaints->where('status', 'abierto')->count() }} Abiertos</span>
 @endsection
 
 @section('content')
 <div class="stats-grid">
     <div class="stat-card red">
-        <div class="stat-label">Pendientes</div>
-        <div class="stat-value red">{{ $complaints->where('status', 'pendiente')->count() }}</div>
+        <div class="stat-label">Abiertos</div>
+        <div class="stat-value red">{{ $complaints->where('status', 'abierto')->count() }}</div>
         <div class="stat-icon-wrap red">🔴</div>
     </div>
     <div class="stat-card amber">
-        <div class="stat-label">En Proceso</div>
-        <div class="stat-value amber">{{ $complaints->where('status', 'proceso')->count() }}</div>
+        <div class="stat-label">En Revisión</div>
+        <div class="stat-value amber">{{ $complaints->where('status', 'en_revision')->count() }}</div>
         <div class="stat-icon-wrap amber">🟠</div>
     </div>
     <div class="stat-card green">
-        <div class="stat-label">Resueltos</div>
-        <div class="stat-value green">{{ $complaints->where('status', 'resuelto')->count() }}</div>
+        <div class="stat-label">Respondidos</div>
+        <div class="stat-value green">{{ $complaints->where('status', 'respondido')->count() }}</div>
         <div class="stat-icon-wrap green">🟢</div>
     </div>
     <div class="stat-card purple">
@@ -61,10 +61,11 @@
                 <label class="form-label">Estado</label>
                 <select name="status" class="form-select" onchange="this.form.submit()">
                     <option value="">Todos</option>
-                    <option value="pendiente" {{ request('status') == 'pendiente' ? 'selected' : '' }}>Pendiente</option>
-                    <option value="proceso" {{ request('status') == 'proceso' ? 'selected' : '' }}>En Proceso</option>
-                    <option value="resuelto" {{ request('status') == 'resuelto' ? 'selected' : '' }}>Resuelto</option>
+                    <option value="abierto" {{ request('status') == 'abierto' ? 'selected' : '' }}>Abierto</option>
+                    <option value="en_revision" {{ request('status') == 'en_revision' ? 'selected' : '' }}>En Revisión</option>
+                    <option value="respondido" {{ request('status') == 'respondido' ? 'selected' : '' }}>Respondido</option>
                     <option value="cerrado" {{ request('status') == 'cerrado' ? 'selected' : '' }}>Cerrado</option>
+                    <option value="rechazado" {{ request('status') == 'rechazado' ? 'selected' : '' }}>Rechazado</option>
                 </select>
             </div>
             <div class="form-group">
@@ -123,17 +124,19 @@
                         </td>
                         <td>
                             <span class="badge badge-{{ match($c->status) {
-                                'pendiente' => 'red',
-                                'proceso' => 'amber',
-                                'resuelto' => 'green',
+                                'abierto' => 'red',
+                                'en_revision' => 'amber',
+                                'respondido' => 'green',
                                 'cerrado' => 'gray',
+                                'rechazado' => 'red',
                                 default => 'gray'
                             } }}">
                                 {{ match($c->status) {
-                                    'pendiente' => '🔴 Pendiente',
-                                    'proceso' => '🟠 Proceso',
-                                    'resuelto' => '🟢 Resuelto',
+                                    'abierto' => '🔴 Abierto',
+                                    'en_revision' => '🟠 En Revisión',
+                                    'respondido' => '🟢 Respondido',
                                     'cerrado' => '⚫ Cerrado',
+                                    'rechazado' => '❌ Rechazado',
                                     default => ucfirst($c->status)
                                 } }}
                             </span>

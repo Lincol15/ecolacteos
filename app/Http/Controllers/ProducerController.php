@@ -5,12 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\Complaint;
 use App\Models\MilkDelivery;
 use App\Models\Notification;
+use App\Models\NotificationRead;
 use App\Models\Payment;
 use App\Models\Producer;
 use App\Models\QualityReport;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Carbon\Carbon;
 
 class ProducerController extends Controller
 {
@@ -18,7 +19,7 @@ class ProducerController extends Controller
     {
         $user = Auth::user();
         $producer = $user->producer ?? Producer::firstOrCreate(['user_id' => $user->id], [
-            'code' => 'PROD-' . str_pad((string)$user->id, 5, '0', STR_PAD_LEFT),
+            'code' => 'PROD-'.str_pad((string) $user->id, 5, '0', STR_PAD_LEFT),
             'zone' => 'Huata', 'district' => 'Huata', 'province' => 'Huata', 'region' => 'Ancash',
             'status' => 'activo', 'registration_date' => now(),
         ]);
@@ -76,6 +77,7 @@ class ProducerController extends Controller
             'liters' => $deliveries->total() > 0 ? $query->sum('liters') : 0,
             'amount' => $deliveries->total() > 0 ? $query->sum('total_amount') : 0,
         ];
+
         return view('producer.deliveries', compact('deliveries', 'totals'));
     }
 
@@ -114,6 +116,7 @@ class ProducerController extends Controller
             'total_bonos' => Payment::where('producer_id', $producer->id)->sum(\DB::raw('quality_bonus + production_bonus')),
             'total_liters' => Payment::where('producer_id', $producer->id)->sum('total_liters'),
         ];
+
         return view('producer.payments', compact('payments', 'summary'));
     }
 
@@ -123,6 +126,7 @@ class ProducerController extends Controller
             abort(403);
         }
         $payment->load('items.milkDelivery.qualityReport', 'processedBy');
+
         return view('producer.payment-show', compact('payment'));
     }
 
@@ -131,6 +135,7 @@ class ProducerController extends Controller
         $producer = Auth::user()->producer;
         $complaints = Complaint::where('producer_id', $producer->id)
             ->with('assignedTo')->latest()->paginate(10);
+
         return view('producer.complaints', compact('complaints'));
     }
 
@@ -150,11 +155,12 @@ class ProducerController extends Controller
         ]);
         Complaint::create([
             ...$data,
-            'ticket_number' => 'TK-' . now()->year . '-' . str_pad((string)(Complaint::count() + 1), 5, '0', STR_PAD_LEFT),
+            'ticket_number' => 'TK-'.now()->year.'-'.str_pad((string) (Complaint::count() + 1), 5, '0', STR_PAD_LEFT),
             'producer_id' => $producer->id,
             'user_id' => Auth::id(),
             'status' => 'abierto',
         ]);
+
         return redirect()->route('producer.complaints')->with('success', 'Reclamo enviado correctamente. Se le notificará cuando haya respuesta.');
     }
 
@@ -163,13 +169,34 @@ class ProducerController extends Controller
         if ($complaint->producer_id !== Auth::user()->producer?->id) {
             abort(403);
         }
+
         return view('producer.complaints-show', compact('complaint'));
+    }
+
+    public function notifications()
+    {
+        $user = Auth::user();
+        $readIds = NotificationRead::where('user_id', $user->id)->pluck('notification_id');
+        $notifications = Notification::visibleForUser($user)->paginate(15);
+
+        return view('producer.notifications', compact('notifications', 'readIds'));
+    }
+
+    public function notificationRead(Notification $notification)
+    {
+        NotificationRead::firstOrCreate([
+            'notification_id' => $notification->id,
+            'user_id' => Auth::id(),
+        ], ['read_at' => now()]);
+
+        return back()->with('success', 'Notificación marcada como leída.');
     }
 
     public function profile()
     {
         $user = Auth::user();
         $producer = $user->producer;
+
         return view('producer.profile', compact('user', 'producer'));
     }
 
@@ -189,6 +216,7 @@ class ProducerController extends Controller
         if ($user->producer) {
             $user->producer->update($data);
         }
+
         return back()->with('success', 'Datos actualizados correctamente.');
     }
 }

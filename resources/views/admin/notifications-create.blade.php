@@ -35,6 +35,16 @@
                         <option value="gerencia" {{ old('target') == 'gerencia' ? 'selected' : '' }}>👔 Gerencia / Admin</option>
                         <option value="admin" {{ old('target') == 'admin' ? 'selected' : '' }}>👑 Solo Admin</option>
                     </select>
+                    <small class="form-hint">Se ignora si eliges un usuario específico abajo.</small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Usuario Específico (opcional)</label>
+                    <select name="user_id" class="form-select">
+                        <option value="">-- Ninguno, usar "Dirigido a" --</option>
+                        @foreach($users ?? [] as $u)
+                        <option value="{{ $u->id }}" {{ old('user_id') == $u->id ? 'selected' : '' }}>{{ $u->fullname }} ({{ $u->roleLabel }})</option>
+                        @endforeach
+                    </select>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Prioridad *</label>

@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Nuevo Análisis LACTOMAT - VACA SYS')
+@section('title', 'Nuevo Análisis LACTOMAT - Ecolácteos Huata')
 @section('page-title', 'Nuevo Análisis de Calidad')
 @section('page-subtitle', 'Registrar resultados del análisis LACTOMAT por entrega de leche')
 
@@ -11,21 +11,45 @@
         <a href="{{ route('quality.reports') }}" class="btn btn-sm btn-ghost">← Volver a Reportes</a>
     </div>
     <div class="panel-body">
-        <form method="POST" action="{{ route('quality.report-store') }}">
+        <form method="POST" action="{{ route('quality.report-store') }}" enctype="multipart/form-data" id="reportForm">
             @csrf
+            <input type="hidden" name="ticket_photo_path" id="ticket_photo_path" value="">
+
+            <div style="background:#f5f3ff;border-radius:12px;padding:16px 20px;margin-bottom:20px">
+                <div style="font-weight:700;color:#4c1d95;margin-bottom:8px">📷 Escaneo de Ticket LACTOMAT (OCR)</div>
+                <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+                    <div class="form-group" style="flex:1; min-width:220px;">
+                        <label class="form-label">Foto del Ticket</label>
+                        <input type="file" name="ticket_photo" id="ticket_photo" accept="image/*" class="form-input">
+                    </div>
+                    <button type="button" id="scanBtn" class="btn btn-purple">🔍 Escanear Ticket</button>
+                </div>
+                <div id="ocrStatus" style="font-size:12.5px; margin-top:8px; color:#6b21a8;"></div>
+            </div>
 
             <div class="form-grid" style="margin-bottom:20px">
                 <div class="form-group" style="grid-column:1 / -1">
-                    <label class="form-label">Entrega de Leche *</label>
-                    <select name="milk_delivery_id" id="milk_delivery_id" class="form-select" required>
-                        <option value="">-- Seleccionar entrega pendiente --</option>
+                    <label class="form-label">Entrega de Leche (id_registro_acopio, opcional)</label>
+                    <select name="milk_delivery_id" id="milk_delivery_id" class="form-select">
+                        <option value="">-- Análisis sin entrega asociada --</option>
                         @forelse($pendingDeliveries ?? [] as $d)
-                        <option value="{{ $d->id }}" {{ (request('delivery_id') == $d->id || old('milk_delivery_id') == $d->id) ? 'selected' : '' }}>
+                        <option value="{{ $d->id }}" data-producer="{{ $d->producer_id }}" {{ (request('delivery_id') == $d->id || old('milk_delivery_id') == $d->id) ? 'selected' : '' }}>
                             #{{ $d->id }} - {{ $d->producer?->user?->fullname ?? 'N/A' }} ({{ number_format($d->liters, 2) }} L) - {{ $d->delivery_date?->format('d/m/Y') }}
                         </option>
                         @empty
                         <option value="" disabled>No hay entregas pendientes de análisis</option>
                         @endforelse
+                    </select>
+                </div>
+                <div class="form-group" style="grid-column:1 / -1">
+                    <label class="form-label">Productor *</label>
+                    <select name="producer_id" id="producer_id" class="form-select" required>
+                        <option value="">-- Seleccionar productor --</option>
+                        @foreach($producers ?? [] as $p)
+                        <option value="{{ $p->id }}" {{ (old('producer_id') ?? $delivery?->producer_id) == $p->id ? 'selected' : '' }}>
+                            {{ $p->code }} - {{ $p->user?->fullname }}
+                        </option>
+                        @endforeach
                     </select>
                 </div>
             </div>
@@ -37,8 +61,29 @@
                         <label class="form-label">Código de Muestra</label>
                         <input type="text" name="sample_code" value="{{ old('sample_code', 'SMP-' . str_pad(rand(1,99999), 5, '0', STR_PAD_LEFT)) }}" class="form-input" placeholder="SMP-00001">
                     </div>
+                    <div class="form-group">
+                        <label class="form-label">Temperatura (°C)</label>
+                        <input type="number" step="0.01" name="temperatura" value="{{ old('temperatura', $delivery?->temperature) }}" class="form-input" placeholder="4.50">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Origen de los Datos</label>
+                        <select name="origen_datos" class="form-select">
+                            <option value="manual" {{ old('origen_datos', 'manual') === 'manual' ? 'selected' : '' }}>Manual</option>
+                            <option value="ocr" {{ old('origen_datos') === 'ocr' ? 'selected' : '' }}>OCR</option>
+                            <option value="ocr_corregido" {{ old('origen_datos') === 'ocr_corregido' ? 'selected' : '' }}>OCR Corregido</option>
+                        </select>
+                    </div>
                 </div>
             </div>
+
+            <script>
+                document.getElementById('milk_delivery_id')?.addEventListener('change', function () {
+                    const producerId = this.selectedOptions[0]?.dataset?.producer;
+                    if (producerId) {
+                        document.getElementById('producer_id').value = producerId;
+                    }
+                });
+            </script>
 
             <div style="background:#eff6ff;border-radius:12px;padding:16px 20px;margin-bottom:24px">
                 <div style="font-weight:700;color:#1e40af;margin-bottom:8px">📊 Parámetros LACTOMAT (%)</div>
@@ -103,6 +148,7 @@
                             <option value="rechazado" {{ old('result') === 'rechazado' ? 'selected' : '' }}>❌ Rechazado</option>
                             <option value="aceptable" {{ old('result') === 'aceptable' ? 'selected' : '' }}>👍 Aceptable</option>
                             <option value="observado" {{ old('result') === 'observado' ? 'selected' : '' }}>👁️ Observado</option>
+                            <option value="pendiente" {{ old('result') === 'pendiente' ? 'selected' : '' }}>⏳ Pendiente</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -132,4 +178,38 @@
         </form>
     </div>
 </div>
+
+<script>
+document.getElementById('scanBtn')?.addEventListener('click', function () {
+    const fileInput = document.getElementById('ticket_photo');
+    const statusEl = document.getElementById('ocrStatus');
+    if (!fileInput.files.length) {
+        statusEl.textContent = 'Selecciona primero una foto del ticket.';
+        return;
+    }
+    const formData = new FormData();
+    formData.append('ticket_photo', fileInput.files[0]);
+    formData.append('_token', document.querySelector('input[name="_token"]').value);
+
+    statusEl.textContent = 'Escaneando...';
+    this.disabled = true;
+
+    fetch('{{ route('quality.report-ocr-scan') }}', { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('ticket_photo_path').value = data.ticket_photo_path || '';
+            Object.entries(data.fields || {}).forEach(([field, value]) => {
+                const input = document.querySelector(`[name="${field}"]`);
+                if (input) input.value = value;
+            });
+            const origenSelect = document.querySelector('[name="origen_datos"]');
+            if (origenSelect && Object.keys(data.fields || {}).length) {
+                origenSelect.value = 'ocr';
+            }
+            statusEl.textContent = data.message || 'Escaneo completado.';
+        })
+        .catch(() => { statusEl.textContent = 'Error al escanear la imagen.'; })
+        .finally(() => { this.disabled = false; });
+});
+</script>
 @endsection

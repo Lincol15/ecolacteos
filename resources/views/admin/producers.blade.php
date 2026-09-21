@@ -16,19 +16,14 @@
         <div class="stat-value green">{{ $producers->count() }}</div>
         <div class="stat-icon-wrap green">👨‍🌾</div>
     </div>
-    <div class="stat-card amber">
-        <div class="stat-label">Hectáreas Totales</div>
-        <div class="stat-value amber">{{ number_format($producers->sum('hectareas'), 0) }} ha</div>
-        <div class="stat-icon-wrap amber">🌾</div>
-    </div>
     <div class="stat-card blue">
         <div class="stat-label">Vacas Registradas</div>
         <div class="stat-value blue">{{ number_format($producers->sum('cows_count'), 0) }}</div>
         <div class="stat-icon-wrap blue">🐄</div>
     </div>
     <div class="stat-card purple">
-        <div class="stat-label">Litros Totales (Est.)</div>
-        <div class="stat-value purple">{{ number_format($producers->sum('average_liters') * 30, 0) }} L</div>
+        <div class="stat-label">Litros Totales (Est./mes)</div>
+        <div class="stat-value purple">{{ number_format($producers->sum('daily_avg_liters') * 30, 0) }} L</div>
         <div class="stat-icon-wrap purple">🥛</div>
     </div>
 </div>
@@ -76,7 +71,7 @@
                     <tr>
                         <th>Código</th>
                         <th>Productor / Finca</th>
-                        <th>Zona / Región</th>
+                        <th>Zona / Comunidad</th>
                         <th>Vacas</th>
                         <th>Litros/Día</th>
                         <th>Total Litros Mes</th>
@@ -94,18 +89,22 @@
                         </td>
                         <td>
                             <strong>{{ $producer->zone }}</strong>
-                            <div style="font-size:12px; color:var(--text-light);">{{ $producer->region }}, {{ $producer->province }}</div>
+                            <div style="font-size:12px; color:var(--text-light);">{{ $producer->comunidad }}</div>
                         </td>
                         <td>{{ number_format($producer->cows_count, 0) }} 🐄</td>
-                        <td>{{ number_format($producer->average_liters, 1) }} L</td>
-                        <td><strong class="text-green">{{ number_format($producer->average_liters * 30, 0) }} L</strong></td>
+                        <td>{{ number_format($producer->daily_avg_liters, 1) }} L</td>
+                        <td><strong class="text-green">{{ number_format($producer->daily_avg_liters * 30, 0) }} L</strong></td>
                         <td>
                             <span class="badge {{ $producer->status == 'activo' ? 'badge-green' : 'badge-red' }}">
                                 {{ $producer->status == 'activo' ? '✅ Activo' : '❌ Inactivo' }}
                             </span>
                         </td>
                         <td>
+                            @if(auth()->user()->isAdmin())
                             <a href="{{ route('admin.producers-edit', $producer) }}" class="btn btn-info btn-sm">✏️ Editar</a>
+                            @else
+                            <span class="badge badge-gray">Solo lectura</span>
+                            @endif
                         </td>
                     </tr>
                     @empty

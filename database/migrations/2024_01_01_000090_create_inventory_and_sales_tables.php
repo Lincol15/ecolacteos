@@ -8,24 +8,6 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('inventories', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('production_batch_id')->nullable()->constrained('production_batches')->onDelete('set null');
-            $table->foreignId('product_id')->constrained('products')->onDelete('cascade');
-            $table->decimal('quantity', 12, 2);
-            $table->string('unit', 20);
-            $table->enum('movement_type', ['entrada', 'salida', 'ajuste', 'devolucion', 'merma']);
-            $table->decimal('unit_cost', 10, 2)->default(0);
-            $table->decimal('total_value', 12, 2)->default(0);
-            $table->string('location', 100)->default('planta_principal');
-            $table->date('expiration_date')->nullable();
-            $table->string('reference_document', 50)->nullable();
-            $table->foreignId('related_sale_id')->nullable()->constrained('sales')->onDelete('set null');
-            $table->foreignId('processed_by')->nullable()->constrained('users')->onDelete('set null');
-            $table->text('notes')->nullable();
-            $table->timestamps();
-        });
-
         Schema::create('sales', function (Blueprint $table) {
             $table->id();
             $table->string('invoice_number', 30)->unique()->nullable();
@@ -46,6 +28,24 @@ return new class extends Migration
             $table->text('notes')->nullable();
             $table->timestamps();
             $table->softDeletes();
+        });
+
+        Schema::create('inventories', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('production_batch_id')->nullable()->constrained('production_batches')->onDelete('set null');
+            $table->foreignId('product_id')->constrained('products')->onDelete('cascade');
+            $table->decimal('quantity', 12, 2);
+            $table->string('unit', 20);
+            $table->enum('movement_type', ['entrada', 'salida', 'ajuste', 'devolucion', 'merma']);
+            $table->decimal('unit_cost', 10, 2)->default(0);
+            $table->decimal('total_value', 12, 2)->default(0);
+            $table->string('location', 100)->default('planta_principal');
+            $table->date('expiration_date')->nullable();
+            $table->string('reference_document', 50)->nullable();
+            $table->foreignId('related_sale_id')->nullable()->constrained('sales')->onDelete('set null');
+            $table->foreignId('processed_by')->nullable()->constrained('users')->onDelete('set null');
+            $table->text('notes')->nullable();
+            $table->timestamps();
         });
 
         Schema::create('sale_items', function (Blueprint $table) {

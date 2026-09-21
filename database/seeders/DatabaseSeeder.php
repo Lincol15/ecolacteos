@@ -5,18 +5,24 @@ namespace Database\Seeders;
 use App\Models\CollectionRoute;
 use App\Models\Complaint;
 use App\Models\ContactMessage;
+use App\Models\Ingredient;
+use App\Models\IngredientMovement;
 use App\Models\Inventory;
 use App\Models\MilkDelivery;
 use App\Models\Notification;
 use App\Models\Payment;
+use App\Models\PaymentItem;
 use App\Models\PlantConfig;
 use App\Models\Producer;
 use App\Models\Product;
 use App\Models\ProductionBatch;
 use App\Models\QualityReport;
+use App\Models\Recipe;
+use App\Models\RecipeIngredient;
 use App\Models\RouteStop;
 use App\Models\Sale;
 use App\Models\SaleItem;
+use App\Models\Sanction;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
@@ -30,23 +36,26 @@ class DatabaseSeeder extends Seeder
 
     public function run(): void
     {
-        DB::statement('PRAGMA foreign_keys = OFF');
+        $driver = DB::connection()->getDriverName();
+        DB::statement($driver === 'sqlite' ? 'PRAGMA foreign_keys = OFF' : 'SET FOREIGN_KEY_CHECKS=0');
 
         $this->createUsers();
         $this->createProducers();
         $this->createPlantConfigs();
         $this->createNotifications();
         $this->createProducts();
+        $this->createIngredientsAndRecipes();
         $this->createCollectionRoutes();
         $this->createMilkDeliveries();
         $this->createQualityReports();
         $this->createPayments();
         $this->createProductionBatches();
         $this->createSales();
+        $this->createSanctions();
         $this->createComplaints();
         $this->createContactMessages();
 
-        DB::statement('PRAGMA foreign_keys = ON');
+        DB::statement($driver === 'sqlite' ? 'PRAGMA foreign_keys = ON' : 'SET FOREIGN_KEY_CHECKS=1');
     }
 
     private function createUsers(): void
@@ -69,6 +78,7 @@ class DatabaseSeeder extends Seeder
                 'email' => 'acopiador@ecolacteos.com', 'dni' => '00000003',
                 'password' => Hash::make('acopiador123'), 'role' => 'acopiador',
                 'phone' => '987654323', 'address' => 'Huata, Ancash',
+                'comunidad' => 'Huata Centro', 'vehiculo' => 'AB-1234',
             ],
             [
                 'name' => 'Lucía', 'lastname' => 'Torres',
@@ -99,8 +109,10 @@ class DatabaseSeeder extends Seeder
             ['name' => 'Natividad', 'lastname' => 'Rojas', 'dni' => '40123008', 'farm' => 'Finca El Horizonte'],
         ];
 
+        $zones = ['Pueblo Libre', 'San Miguel', 'El Arenal', 'Ticapampa', 'Yanama', 'Uco', 'Caraz Bajo', 'Huata Centro'];
+
         foreach ($producersNames as $i => $p) {
-            $email = 'productor' . ($i + 1) . '@ecolacteos.com';
+            $email = 'productor'.($i + 1).'@ecolacteos.com';
             User::updateOrCreate(
                 ['email' => $email],
                 [
@@ -109,8 +121,9 @@ class DatabaseSeeder extends Seeder
                     'dni' => $p['dni'],
                     'password' => Hash::make('productor123'),
                     'role' => 'productor',
-                    'phone' => '98700' . str_pad((string)($i + 10), 3, '0', STR_PAD_LEFT),
-                    'address' => $p['farm'] . ', Huata',
+                    'phone' => '98700'.str_pad((string) ($i + 10), 3, '0', STR_PAD_LEFT),
+                    'address' => $p['farm'].', Huata',
+                    'comunidad' => $zones[$i % count($zones)],
                 ]
             );
         }
@@ -124,9 +137,10 @@ class DatabaseSeeder extends Seeder
             Producer::updateOrCreate(
                 ['user_id' => $user->id],
                 [
-                    'code' => 'PROD-' . str_pad((string)($userIndex + 1), 3, '0', STR_PAD_LEFT),
+                    'code' => 'PROD-'.str_pad((string) ($userIndex + 1), 3, '0', STR_PAD_LEFT),
                     'farm_name' => $user->address ?? 'Finca',
                     'zone' => $zones[$userIndex % count($zones)],
+                    'comunidad' => $user->comunidad ?? $zones[$userIndex % count($zones)],
                     'district' => 'Huata',
                     'province' => 'Huata',
                     'region' => 'Ancash',
@@ -156,6 +170,8 @@ class DatabaseSeeder extends Seeder
             ['key' => 'bono_calidad_minimo_score', 'label' => 'Score Mínimo para Bono Calidad (%)', 'value' => '90', 'value_type' => 'number'],
             ['key' => 'tolerancia_agua_pct', 'label' => 'Tolerancia Agua Añadida (%)', 'value' => '5', 'value_type' => 'number'],
             ['key' => 'dias_pago_semanal', 'label' => 'Día Pago Semanal', 'value' => 'Viernes', 'value_type' => 'string'],
+            ['key' => 'litros_maximos_entrega', 'label' => 'Litros Máximos por Entrega', 'value' => '10000', 'value_type' => 'number',
+                'description' => 'Cantidad máxima de litros permitida en un solo registro de acopio'],
         ];
         $admin = User::where('role', 'admin')->first();
         foreach ($configs as $c) {
@@ -269,6 +285,69 @@ class DatabaseSeeder extends Seeder
         }
     }
 
+    private function createIngredientsAndRecipes(): void
+    {
+        $admin = User::where('role', 'admin')->first();
+
+        $ingredients = [
+            ['name' => 'Leche', 'unit' => 'L', 'is_milk' => true],
+            ['name' => 'Sal', 'unit' => 'g', 'is_milk' => false, 'min_stock' => 500],
+            ['name' => 'Cuajo', 'unit' => 'und', 'is_milk' => false, 'min_stock' => 100],
+            ['name' => 'Azúcar', 'unit' => 'g', 'is_milk' => false, 'min_stock' => 1000],
+        ];
+        foreach ($ingredients as $i) {
+            Ingredient::updateOrCreate(['name' => $i['name']], [...$i, 'active' => true]);
+        }
+
+        $stock = ['Azúcar' => 2000, 'Sal' => 1000, 'Cuajo' => 1000];
+        foreach ($stock as $name => $quantity) {
+            $ingredient = Ingredient::where('name', $name)->first();
+            if ($ingredient && $ingredient->movements()->count() === 0) {
+                IngredientMovement::create([
+                    'ingredient_id' => $ingredient->id,
+                    'movement_type' => 'entrada',
+                    'quantity' => $quantity,
+                    'processed_by' => $admin?->id,
+                    'notes' => 'Stock inicial',
+                ]);
+            }
+        }
+
+        $leche = Ingredient::where('name', 'Leche')->first();
+        $sal = Ingredient::where('name', 'Sal')->first();
+        $cuajo = Ingredient::where('name', 'Cuajo')->first();
+        $azucar = Ingredient::where('name', 'Azúcar')->first();
+
+        $queso = Product::where('sku', 'QUES-AND-001')->first();
+        if ($queso && ! Recipe::where('product_id', $queso->id)->exists()) {
+            $recipe = Recipe::create([
+                'product_id' => $queso->id,
+                'name' => 'Queso Fresco 1kg',
+                'milk_liters_per_unit' => 5,
+                'instructions' => 'Cuajar la leche, cortar la cuajada, prensar y salar.',
+                'active' => true,
+                'created_by' => $admin?->id,
+            ]);
+            RecipeIngredient::create(['recipe_id' => $recipe->id, 'ingredient_id' => $leche->id, 'quantity_per_unit' => 5]);
+            RecipeIngredient::create(['recipe_id' => $recipe->id, 'ingredient_id' => $sal->id, 'quantity_per_unit' => 50]);
+            RecipeIngredient::create(['recipe_id' => $recipe->id, 'ingredient_id' => $cuajo->id, 'quantity_per_unit' => 1]);
+        }
+
+        $yogur = Product::where('sku', 'YOG-NAT-002')->first();
+        if ($yogur && ! Recipe::where('product_id', $yogur->id)->exists()) {
+            $recipe = Recipe::create([
+                'product_id' => $yogur->id,
+                'name' => 'Yogur Natural 1L',
+                'milk_liters_per_unit' => 1,
+                'instructions' => 'Pasteurizar la leche, inocular cultivos, incubar y enfriar.',
+                'active' => true,
+                'created_by' => $admin?->id,
+            ]);
+            RecipeIngredient::create(['recipe_id' => $recipe->id, 'ingredient_id' => $leche->id, 'quantity_per_unit' => 1]);
+            RecipeIngredient::create(['recipe_id' => $recipe->id, 'ingredient_id' => $azucar->id, 'quantity_per_unit' => 100]);
+        }
+    }
+
     private function createCollectionRoutes(): void
     {
         $collector = User::where('role', 'acopiador')->first();
@@ -303,7 +382,7 @@ class DatabaseSeeder extends Seeder
                     'collection_route_id' => $route->id,
                     'producer_id' => $p->id,
                     'stop_order' => $stopOrder++,
-                    'estimated_arrival' => sprintf('%02d:%02d', $hour + (int)($stopOrder / 2), 15 * ($stopOrder % 4)),
+                    'estimated_arrival' => sprintf('%02d:%02d', $hour + (int) ($stopOrder / 2), 15 * ($stopOrder % 4)),
                     'estimated_liters' => max(30, $p->daily_avg_liters * (0.9 + (lcg_value() * 0.3))),
                     'special_instructions' => $stopOrder === 1 ? 'Ingresar por portón lateral de la finca' : null,
                     'status' => $route->status === 'completada' ? 'visitado'
@@ -332,11 +411,14 @@ class DatabaseSeeder extends Seeder
                 $routeStop = RouteStop::where('producer_id', $p->id)
                     ->inRandomOrder()
                     ->first();
+                $status = lcg_value() > 0.1 ? (lcg_value() > 0.4 ? 'analizado' : 'aceptado') : 'rechazado';
                 $delivery = MilkDelivery::create([
                     'producer_id' => $p->id,
                     'collector_id' => $collector?->id,
                     'route_stop_id' => $routeStop?->id,
                     'collection_route_id' => $routeStop?->collection_route_id,
+                    'zona' => $p->comunidad ?? $p->zone,
+                    'recibido' => $status !== 'registrado',
                     'liters' => $liters,
                     'temperature' => round(4.5 + (lcg_value() * 4), 2),
                     'price_per_liter' => $pricePerLiter,
@@ -348,7 +430,7 @@ class DatabaseSeeder extends Seeder
                     'vehicle_plate' => ['AB-1234', 'CD-5678', 'EF-9012'][array_rand(['AB-1234', 'CD-5678', 'EF-9012'])],
                     'observations' => lcg_value() > 0.8 ? 'Leche con buena temperatura al momento de recojo.' : null,
                     'has_quality_analysis' => lcg_value() > 0.2,
-                    'status' => lcg_value() > 0.1 ? (lcg_value() > 0.4 ? 'analizado' : 'aceptado') : 'rechazado',
+                    'status' => $status,
                     'approved_by' => $qualityUser?->id,
                     'approved_at' => Carbon::now()->addDays($dayOffset)->addHours(rand(1, 4)),
                 ]);
@@ -373,8 +455,11 @@ class DatabaseSeeder extends Seeder
                     $rejected = $agua > 5 || $grasa < 2.9 || $congelacion > -0.50;
                     QualityReport::create([
                         'milk_delivery_id' => $d->id,
+                        'producer_id' => $d->producer_id,
                         'analyst_id' => $analyst?->id,
-                        'sample_code' => 'MUE-' . $d->id . '-' . strtoupper(substr(md5((string)$d->id), 0, 4)),
+                        'sample_code' => 'MUE-'.$d->id.'-'.strtoupper(substr(md5((string) $d->id), 0, 4)),
+                        'temperatura' => $d->temperature,
+                        'origen_datos' => lcg_value() > 0.85 ? 'ocr_corregido' : (lcg_value() > 0.5 ? 'ocr' : 'manual'),
                         'grasa_pct' => $grasa,
                         'proteina_pct' => $proteina,
                         'lactosa_pct' => $lactosa,
@@ -420,33 +505,43 @@ class DatabaseSeeder extends Seeder
                 $qualityBonus = $liters > 200 ? round($base * 0.05, 2) : 0;
                 $volumeBonus = $liters > 500 ? round($base * 0.03, 2) : 0;
                 $deductions = lcg_value() > 0.7 ? round($base * 0.01, 2) : 0;
-                $total = round($base + $qualityBonus + $volumeBonus - $deductions, 2);
+                $llevadoAPlanta = round($deliveries->whereNull('collector_id')->sum('total_amount'), 2);
+                $total = round($base + $qualityBonus + $volumeBonus - $deductions - $llevadoAPlanta, 2);
+
+                $dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+                $detalleDiario = array_fill_keys($dias, 0.0);
+                foreach ($deliveries as $d) {
+                    $detalleDiario[$dias[Carbon::parse($d->delivery_date)->dayOfWeekIso - 1]] += (float) $d->liters;
+                }
 
                 $payment = Payment::create([
                     'producer_id' => $p->id,
-                    'period_code' => 'SEM-' . $start->format('Y') . '-W' . $start->weekOfYear,
+                    'period_code' => 'SEM-'.$start->format('Y').'-W'.$start->weekOfYear,
                     'period_start' => $start,
                     'period_end' => $end,
                     'payment_date' => $end->copy()->addDay(),
                     'total_liters' => $liters,
+                    'detalle_diario' => array_map(fn ($v) => round($v, 2), $detalleDiario),
                     'avg_price_per_liter' => $liters > 0 ? round($base / $liters, 2) : 1.70,
+                    'precio_por_litro' => 1.70,
                     'base_amount' => $base,
                     'quality_bonus' => $qualityBonus,
                     'production_bonus' => $volumeBonus,
                     'deductions' => $deductions,
+                    'llevado_a_planta' => $llevadoAPlanta,
                     'total_amount' => $total,
                     'deductions_detail' => $deductions > 0 ? 'Aporte fondo solidario 1%' : null,
                     'bonus_detail' => ($qualityBonus > 0 ? "Bono calidad S/{$qualityBonus} " : '')
-                        . ($volumeBonus > 0 ? "Bono volumen S/{$volumeBonus}" : '') ?: null,
+                        .($volumeBonus > 0 ? "Bono volumen S/{$volumeBonus}" : '') ?: null,
                     'payment_method' => 'transferencia',
-                    'transaction_number' => 'TXN' . strtoupper(substr(md5((string)$p->id . $week), 0, 10)),
-                    'status' => lcg_value() > 0.3 ? 'pagado' : (lcg_value() > 0.5 ? 'procesando' : 'pendiente'),
+                    'transaction_number' => 'TXN'.strtoupper(substr(md5((string) $p->id.$week), 0, 10)),
+                    'status' => lcg_value() > 0.3 ? 'pagado' : (lcg_value() > 0.5 ? 'procesando' : (lcg_value() > 0.5 ? 'parcial' : 'pendiente')),
                     'processed_by' => $gerente?->id,
                     'notes' => 'Liquidación semanal automática.',
                 ]);
 
                 foreach ($deliveries as $d) {
-                    \App\Models\PaymentItem::create([
+                    PaymentItem::create([
                         'payment_id' => $payment->id,
                         'milk_delivery_id' => $d->id,
                         'liters' => $d->liters,
@@ -477,7 +572,7 @@ class DatabaseSeeder extends Seeder
             $output = round($input * $yieldFactor, 2);
             $prodDate = Carbon::now()->subDays($idx * 2);
             $batch = ProductionBatch::create([
-                'batch_number' => 'LOTE-' . $prodDate->format('Ymd') . '-' . str_pad((string)$batchIndex, 3, '0', STR_PAD_LEFT),
+                'batch_number' => 'LOTE-'.$prodDate->format('Ymd').'-'.str_pad((string) $batchIndex, 3, '0', STR_PAD_LEFT),
                 'product_id' => $product->id,
                 'input_milk_liters' => $input,
                 'output_units' => $output,
@@ -574,10 +669,10 @@ class DatabaseSeeder extends Seeder
             $tax = round($subtotal * 0.18, 2);
             $discount = lcg_value() > 0.8 ? round($subtotal * 0.05, 2) : 0;
             $sale = Sale::create([
-                'invoice_number' => 'FV-' . $date->format('Ymd') . '-' . str_pad((string)$i, 4, '0', STR_PAD_LEFT),
+                'invoice_number' => 'FV-'.$date->format('Ymd').'-'.str_pad((string) $i, 4, '0', STR_PAD_LEFT),
                 'client_name' => $cliente['client_name'],
                 'client_dni_ruc' => $cliente['dni'],
-                'client_phone' => '9' . str_pad((string)rand(10000000, 99999999), 8, '0', STR_PAD_LEFT),
+                'client_phone' => '9'.str_pad((string) rand(10000000, 99999999), 8, '0', STR_PAD_LEFT),
                 'client_address' => 'Huata, Ancash',
                 'sale_date' => $date,
                 'subtotal' => round($subtotal, 2),
@@ -593,6 +688,31 @@ class DatabaseSeeder extends Seeder
             foreach ($items as $it) {
                 SaleItem::create(['sale_id' => $sale->id, ...$it]);
             }
+        }
+    }
+
+    private function createSanctions(): void
+    {
+        $producers = Producer::limit(3)->get();
+        $gerente = User::where('role', 'gerente')->first();
+        $sanctions = [
+            ['type' => 'calidad', 'motivo' => 'Adulteración con agua detectada', 'status' => 'activa', 'amount' => 50.00],
+            ['type' => 'pesaje', 'motivo' => 'Diferencia reiterada en pesaje de caneca', 'status' => 'cumplida', 'amount' => 20.00],
+            ['type' => 'incumplimiento', 'motivo' => 'Ausencia sin aviso en 3 recojos consecutivos', 'status' => 'anulada', 'amount' => null],
+        ];
+        foreach ($sanctions as $idx => $s) {
+            $p = $producers[$idx % $producers->count()];
+            Sanction::create([
+                'producer_id' => $p->id,
+                'issued_by' => $gerente?->id,
+                'type' => $s['type'],
+                'motivo' => $s['motivo'],
+                'description' => 'Sanción aplicada según reglamento interno de acopio.',
+                'amount' => $s['amount'],
+                'status' => $s['status'],
+                'sanction_date' => now()->subDays(($idx + 1) * 5),
+                'resolved_date' => $s['status'] !== 'activa' ? now()->subDays($idx) : null,
+            ]);
         }
     }
 
@@ -618,7 +738,7 @@ class DatabaseSeeder extends Seeder
         foreach ($complaints as $idx => $c) {
             $p = $producers[$idx % $producers->count()];
             Complaint::create([
-                'ticket_number' => 'TK-' . Carbon::now()->format('Y') . '-' . str_pad((string)$ticket++, 5, '0', STR_PAD_LEFT),
+                'ticket_number' => 'TK-'.Carbon::now()->format('Y').'-'.str_pad((string) $ticket++, 5, '0', STR_PAD_LEFT),
                 'producer_id' => $p->id,
                 'user_id' => $p->user_id,
                 'category' => $c['category'],

@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Mi Perfil - VACA SYS')
+@section('title', 'Mi Perfil - Ecolácteos Huata')
 @section('page-title', 'Mi Perfil')
 @section('page-subtitle', 'Actualiza tus datos personales')
 

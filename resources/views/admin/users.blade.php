@@ -28,7 +28,7 @@
     </div>
     <div class="stat-card purple">
         <div class="stat-label">Activos</div>
-        <div class="stat-value purple">{{ $users->where('status', 'activo')->count() }}</div>
+        <div class="stat-value purple">{{ $users->where('active', true)->count() }}</div>
         <div class="stat-icon-wrap purple">✅</div>
     </div>
 </div>
@@ -106,8 +106,8 @@
                             </span>
                         </td>
                         <td>
-                            <span class="badge {{ $user->status == 'activo' ? 'badge-green' : 'badge-red' }}">
-                                {{ $user->status == 'activo' ? '✅ Activo' : '❌ Inactivo' }}
+                            <span class="badge {{ $user->active ? 'badge-green' : 'badge-red' }}">
+                                {{ $user->active ? '✅ Activo' : '❌ Inactivo' }}
                             </span>
                         </td>
                         <td>

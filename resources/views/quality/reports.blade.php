@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Reportes de Calidad - VACA SYS')
+@section('title', 'Reportes de Calidad - Ecolácteos Huata')
 @section('page-title', 'Reportes de Análisis')
 @section('page-subtitle', 'Historial completo de análisis de calidad LACTOMAT')
 
@@ -16,7 +16,7 @@
         <div class="panel-title">🔍 Filtros de Búsqueda</div>
     </div>
     <div class="panel-body">
-        <form method="GET" action="{{ route('quality.reports') }}" class="form-grid">
+        <form method="GET" action="{{ route('quality.reports') }}" class="filters">
             <div class="form-group">
                 <label class="form-label">Desde</label>
                 <input type="date" name="from" value="{{ request('from') }}" class="form-input">
@@ -33,6 +33,7 @@
                     <option value="rechazado" {{ request('result') === 'rechazado' ? 'selected' : '' }}>Rechazado</option>
                     <option value="aceptable" {{ request('result') === 'aceptable' ? 'selected' : '' }}>Aceptable</option>
                     <option value="observado" {{ request('result') === 'observado' ? 'selected' : '' }}>Observado</option>
+                    <option value="pendiente" {{ request('result') === 'pendiente' ? 'selected' : '' }}>Pendiente</option>
                 </select>
             </div>
             <div class="form-group">
@@ -81,16 +82,18 @@
                         <div style="font-weight:600">{{ $r->created_at?->format('d/m/Y') }}</div>
                         <div style="font-size:11px;color:#94a3b8">{{ $r->created_at?->format('H:i') }}</div>
                     </td>
-                    <td style="font-weight:600;color:#2563eb">#{{ $r->milk_delivery_id }}</td>
+                    <td style="font-weight:600;color:#2563eb">{{ $r->milk_delivery_id ? '#' . $r->milk_delivery_id : 'Directo' }}</td>
                     <td>
-                        <div style="font-weight:600">{{ $r->milkDelivery?->producer?->user?->fullname ?? 'N/A' }}</div>
-                        <div style="font-size:11px;color:#94a3b8">{{ $r->milkDelivery?->producer?->code ?? '' }}</div>
+                        @php $rowProducer = $r->producer ?? $r->milkDelivery?->producer; @endphp
+                        <div style="font-weight:600">{{ $rowProducer?->user?->fullname ?? 'N/A' }}</div>
+                        <div style="font-size:11px;color:#94a3b8">{{ $rowProducer?->code ?? '' }}</div>
                     </td>
                     <td>
                         @if($r->result === 'aprobado') <span class="badge badge-green">✅ Aprobado</span>
                         @elseif($r->result === 'rechazado') <span class="badge badge-red">❌ Rechazado</span>
                         @elseif($r->result === 'aceptable') <span class="badge badge-blue">👍 Aceptable</span>
-                        @else <span class="badge badge-amber">👁️ Observado</span> @endif
+                        @elseif($r->result === 'observado') <span class="badge badge-amber">👁️ Observado</span>
+                        @else <span class="badge badge-gray">⏳ Pendiente</span> @endif
                     </td>
                     <td>
                         <div style="display:flex;align-items:center;gap:8px">

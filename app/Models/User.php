@@ -20,6 +20,8 @@ class User extends Authenticatable
         'email',
         'phone',
         'address',
+        'comunidad',
+        'vehiculo',
         'password',
         'role',
         'active',
@@ -52,6 +54,7 @@ class User extends Authenticatable
     public function hasRole($roles): bool
     {
         $roles = is_array($roles) ? $roles : [$roles];
+
         return in_array($this->role, $roles, true);
     }
 
@@ -87,7 +90,7 @@ class User extends Authenticatable
 
     public function getFullnameAttribute(): string
     {
-        return trim(($this->name ?? '') . ' ' . ($this->lastname ?? ''));
+        return trim(($this->name ?? '').' '.($this->lastname ?? ''));
     }
 
     public function getRoleLabelAttribute(): string
@@ -118,5 +121,10 @@ class User extends Authenticatable
     public function complaintsAssigned()
     {
         return $this->hasMany(Complaint::class, 'assigned_to');
+    }
+
+    public function sanctionsIssued()
+    {
+        return $this->hasMany(Sanction::class, 'issued_by');
     }
 }
