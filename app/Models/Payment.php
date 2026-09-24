@@ -90,4 +90,19 @@ class Payment extends Model
 
         return "{$start} - {$end}";
     }
+
+    public function getReceiptNumberAttribute(): string
+    {
+        return 'LIQ-'.str_pad((string) $this->id, 6, '0', STR_PAD_LEFT);
+    }
+
+    public function getBonusTotalAttribute(): float
+    {
+        return (float) $this->quality_bonus + (float) $this->production_bonus;
+    }
+
+    public function getDiscountTotalAttribute(): float
+    {
+        return (float) $this->deductions + (float) $this->llevado_a_planta;
+    }
 }

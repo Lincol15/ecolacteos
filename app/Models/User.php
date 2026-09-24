@@ -22,6 +22,7 @@ class User extends Authenticatable
         'address',
         'comunidad',
         'vehiculo',
+        'monthly_salary',
         'password',
         'role',
         'active',
@@ -39,6 +40,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'active' => 'boolean',
+            'monthly_salary' => 'decimal:2',
         ];
     }
 
@@ -111,6 +113,37 @@ class User extends Authenticatable
     public function assignedRoutes()
     {
         return $this->hasMany(CollectionRoute::class, 'collector_id');
+    }
+
+    public function collectorPayments()
+    {
+        return $this->hasMany(CollectorPayment::class, 'collector_id');
+    }
+
+    public function assignedProducers()
+    {
+        return $this->belongsToMany(Producer::class, 'collector_producer_assignments', 'collector_id', 'producer_id')
+            ->withTimestamps();
+    }
+
+    /**
+     * Productores que este acopiador atiende, según lo que asigna el admin en
+     * "Configurar Asignación" del detalle del acopiador:
+     * 1. Asignación individual explícita (checklist de excepciones), si existe.
+     * 2. Si no hay ninguna, los productores activos de su comunidad asignada.
+     */
+    public function resolveAssignedProducers()
+    {
+        $explicit = $this->assignedProducers()->with('user')->get();
+        if ($explicit->isNotEmpty()) {
+            return $explicit;
+        }
+
+        if (! $this->comunidad) {
+            return collect();
+        }
+
+        return Producer::where('status', 'activo')->where('comunidad', $this->comunidad)->with('user')->get();
     }
 
     public function complaintsReported()

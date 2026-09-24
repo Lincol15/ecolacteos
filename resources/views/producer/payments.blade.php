@@ -1,122 +1,132 @@
 @extends('layouts.app')
 
-@section('page-title', 'Mis Pagos / Liquidaciones')
-@section('page-subtitle', 'Historial de pagos y liquidaciones por leche entregada')
+@section('page-title', 'Mis Pagos')
+@section('page-subtitle', 'Tus liquidaciones por litro de leche entregada')
 
 @section('content')
-<div class="stats-grid">
-    <div class="stat-card green">
-        <div class="stat-label">Pagos Pagados</div>
-        <div class="stat-value green">{{ $payments->where('status', 'pagado')->count() }}</div>
-        <div class="stat-icon-wrap green">✅</div>
+@if($latestPayment)
+<section class="pay-hero">
+    <div>
+        <div class="pay-hero-label">Última liquidación · {{ $latestPayment->period_start?->format('d/m') }} al {{ $latestPayment->period_end?->format('d/m/Y') }}</div>
+        <div class="pay-hero-amount">S/ {{ number_format($latestPayment->total_amount, 2) }}</div>
+        <div class="pay-hero-meta">
+            <x-payment-status :status="$latestPayment->status" />
+            <span>{{ number_format($latestPayment->total_liters, 1) }} L × S/ {{ number_format($latestPayment->precio_por_litro ?? $latestPayment->avg_price_per_liter, 2) }}</span>
+        </div>
     </div>
-    <div class="stat-card amber">
-        <div class="stat-label">Pagos Pendientes</div>
-        <div class="stat-value amber">{{ $payments->where('status', 'pendiente')->count() }}</div>
-        <div class="stat-icon-wrap amber">⏳</div>
+    <div class="pay-hero-actions">
+        <a href="{{ route('producer.payment-show', $latestPayment) }}" class="btn-icon"><x-icon name="eye" /> Ver detalle</a>
+        <a href="{{ route('producer.payment-receipt', ['payment' => $latestPayment, 'download' => 1]) }}" class="btn-icon light"><x-icon name="download" /> Descargar</a>
     </div>
-    <div class="stat-card blue">
-        <div class="stat-label">Litros Liquidados</div>
-        <div class="stat-value blue">{{ number_format($payments->sum('total_liters'), 0) }} L</div>
-        <div class="stat-icon-wrap blue">🥛</div>
+</section>
+@endif
+
+<div class="pay-kpis">
+    <div class="pay-kpi">
+        <div class="pay-kpi-icon green"><x-icon name="check" /></div>
+        <div>
+            <div class="pay-kpi-label">Total recibido</div>
+            <div class="pay-kpi-value">S/ {{ number_format($summary['total_pagado'], 2) }}</div>
+        </div>
     </div>
-    <div class="stat-card purple">
-        <div class="stat-label">Monto Recibido</div>
-        <div class="stat-value purple">S/{{ number_format($payments->where('status', 'pagado')->sum('total_amount'), 2) }}</div>
-        <div class="stat-icon-wrap purple">💵</div>
+    <div class="pay-kpi">
+        <div class="pay-kpi-icon amber"><x-icon name="clock" /></div>
+        <div>
+            <div class="pay-kpi-label">Pendiente de cobro</div>
+            <div class="pay-kpi-value">S/ {{ number_format($summary['total_pendiente'], 2) }}</div>
+            <div class="pay-kpi-hint">Día de pago: {{ \App\Models\PlantConfig::getValue('dias_pago_semanal', 'Viernes') }}</div>
+        </div>
+    </div>
+    <div class="pay-kpi">
+        <div class="pay-kpi-icon blue"><x-icon name="milk" /></div>
+        <div>
+            <div class="pay-kpi-label">Litros liquidados</div>
+            <div class="pay-kpi-value">{{ number_format($summary['total_liters'], 0) }} L</div>
+        </div>
+    </div>
+    <div class="pay-kpi">
+        <div class="pay-kpi-icon purple"><x-icon name="shield" /></div>
+        <div>
+            <div class="pay-kpi-label">Bonos ganados</div>
+            <div class="pay-kpi-value">S/ {{ number_format($summary['total_bonos'], 2) }}</div>
+        </div>
     </div>
 </div>
 
 <div class="panel">
-    <div class="panel-header">
-        <div class="panel-title">💳 Historial de Liquidaciones</div>
-    </div>
-    <div class="panel-body">
-        <form method="GET" action="{{ route('producer.payments') }}" class="filters">
-            <div class="form-group">
-                <label class="form-label">Período</label>
-                <input type="month" name="period" value="{{ request('period') }}" class="form-input">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Estado</label>
-                <select name="status" class="form-select" onchange="this.form.submit()">
-                    <option value="">Todos</option>
-                    <option value="pendiente" {{ request('status') == 'pendiente' ? 'selected' : '' }}>Pendiente</option>
-                    <option value="procesando" {{ request('status') == 'procesando' ? 'selected' : '' }}>Procesando</option>
-                    <option value="pagado" {{ request('status') == 'pagado' ? 'selected' : '' }}>Pagado</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">&nbsp;</label>
-                <div style="display:flex; gap:8px;">
-                    <button type="submit" class="btn btn-primary btn-sm">🔍 Filtrar</button>
-                    <a href="{{ route('producer.payments') }}" class="btn btn-ghost btn-sm">✖ Limpiar</a>
-                </div>
-            </div>
-        </form>
-
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Período</th>
-                        <th>Litros</th>
-                        <th>Precio Prom.</th>
-                        <th>Base</th>
-                        <th>Bonos</th>
-                        <th>Deducciones</th>
-                        <th>Total</th>
-                        <th>Estado</th>
-                        <th>Método</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($payments as $p)
-                    <tr>
-                        <td><code class="badge badge-blue">{{ $p->period ?? '—' }}</code></td>
-                        <td><strong>{{ number_format($p->total_liters, 0) }} L</strong></td>
-                        <td>S/{{ number_format($p->avg_price_per_liter ?? 0, 3) }}</td>
-                        <td>S/{{ number_format($p->base_amount ?? 0, 2) }}</td>
-                        <td style="color:#059669;">+S/{{ number_format($p->bonuses_amount ?? 0, 2) }}</td>
-                        <td style="color:#dc2626;">-S/{{ number_format($p->deductions_amount ?? 0, 2) }}</td>
-                        <td><strong style="font-size:15px;">S/{{ number_format($p->total_amount, 2) }}</strong></td>
-                        <td>
-                            <span class="badge badge-{{ match($p->status) {
-                                'pendiente' => 'red', 'procesando' => 'amber', 'pagado' => 'green', default => 'gray'
-                            } }}">
-                                {{ match($p->status) {
-                                    'pendiente' => '❌ Pendiente',
-                                    'procesando' => '⏳ Procesando',
-                                    'pagado' => '✅ Pagado',
-                                    default => ucfirst($p->status)
-                                } }}
-                            </span>
-                        </td>
-                        <td>{{ match($p->payment_method) {
-                            'transferencia' => '🏦 Transfer.',
-                            'efectivo' => '💵 Efectivo',
-                            'cheque' => '📄 Cheque',
-                            default => $p->payment_method ?? '—'
-                        } }}</td>
-                        <td>
-                            <a href="{{ route('producer.payment-show', $p) }}" class="btn btn-info btn-sm">🔍 Ver</a>
-                        </td>
-                    </tr>
-                    @empty
-                    <tr>
-                        <td colspan="10">
-                            <div class="empty">
-                                <div class="empty-icon">💳</div>
-                                <h3>Aún no tienes liquidaciones</h3>
-                                <p>Los pagos procesados aparecerán aquí.</p>
-                            </div>
-                        </td>
-                    </tr>
-                    @endforelse
-                </tbody>
-            </table>
+    <form method="GET" action="{{ route('producer.payments') }}" class="pay-toolbar">
+        <div class="form-group">
+            <label class="form-label">Período</label>
+            <input type="month" name="period" value="{{ request('period') }}" class="form-input">
         </div>
+        <div class="form-group">
+            <label class="form-label">Estado</label>
+            <select name="status" class="form-select">
+                <option value="">Todos</option>
+                @foreach(\App\Models\Payment::STATUS as $value => $label)
+                <option value="{{ $value }}" @selected(request('status') === $value)>{{ $label }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div style="display:flex; gap:8px;">
+            <button type="submit" class="btn btn-primary btn-sm">Filtrar</button>
+            <a href="{{ route('producer.payments') }}" class="btn btn-ghost btn-sm">Limpiar</a>
+        </div>
+    </form>
+
+    <div class="table-wrap">
+        <table class="pay-table">
+            <thead>
+                <tr>
+                    <th>Liquidación</th>
+                    <th>Período</th>
+                    <th>Litros × Precio</th>
+                    <th>Bonos</th>
+                    <th>Descuentos</th>
+                    <th>Total neto</th>
+                    <th>Estado</th>
+                    <th style="text-align:right">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse($payments as $p)
+                <tr>
+                    <td><code class="badge badge-gray">{{ $p->receipt_number }}</code></td>
+                    <td>
+                        <div style="font-weight:600">{{ $p->period_start?->format('d/m') }} – {{ $p->period_end?->format('d/m/Y') }}</div>
+                        <div class="pay-muted">{{ $p->period_code }}</div>
+                    </td>
+                    <td>
+                        <div style="font-weight:600">{{ number_format($p->total_liters, 1) }} L</div>
+                        <div class="pay-muted">× S/ {{ number_format($p->precio_por_litro ?? $p->avg_price_per_liter, 2) }}</div>
+                    </td>
+                    <td class="pay-plus">+ S/ {{ number_format($p->bonus_total, 2) }}</td>
+                    <td class="pay-minus">− S/ {{ number_format($p->discount_total, 2) }}</td>
+                    <td class="pay-amount">S/ {{ number_format($p->total_amount, 2) }}</td>
+                    <td><x-payment-status :status="$p->status" /></td>
+                    <td>
+                        <div class="pay-actions">
+                            <a href="{{ route('producer.payment-show', $p) }}" class="btn-icon"><x-icon name="eye" /> Ver</a>
+                            <a href="{{ route('producer.payment-receipt', ['payment' => $p, 'download' => 1]) }}" class="btn-icon primary"><x-icon name="download" /> Descargar</a>
+                        </div>
+                    </td>
+                </tr>
+                @empty
+                <tr>
+                    <td colspan="8">
+                        <div class="empty">
+                            <div class="empty-icon">💳</div>
+                            <h3>Aún no tienes liquidaciones</h3>
+                            <p>Cuando la planta liquide tus entregas de leche aparecerán aquí.</p>
+                        </div>
+                    </td>
+                </tr>
+                @endforelse
+            </tbody>
+        </table>
     </div>
+    @if($payments->hasPages())
+    <div style="padding:16px 20px">{{ $payments->links() }}</div>
+    @endif
 </div>
 @endsection

@@ -4,9 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreMilkDeliveryRequest;
 use App\Models\CollectionRoute;
+use App\Models\CollectorPayment;
 use App\Models\MilkDelivery;
 use App\Models\Notification;
-use App\Models\Producer;
+use App\Models\PlantConfig;
 use App\Models\RouteStop;
 use App\Services\MilkDeliveryService;
 use Carbon\Carbon;
@@ -125,33 +126,17 @@ class CollectorController extends Controller
             $producers->push($routeStop->producer);
         }
 
-        return view('collector.delivery-create', compact('routeStop', 'producers', 'route_stop_id', 'collection_route_id'));
+        $pricePerLiter = (float) PlantConfig::getValue('precio_litro_leche', 1.70);
+
+        return view('collector.delivery-create', compact('routeStop', 'producers', 'route_stop_id', 'collection_route_id', 'pricePerLiter'));
     }
 
     /**
-     * Productores que este acopiador puede atender: los de sus rutas asignadas o,
-     * si no tiene ninguna ruta, los productores activos de su misma comunidad.
+     * Productores que este acopiador puede atender: ver User::resolveAssignedProducers().
      */
     private function myProducers()
     {
-        $user = Auth::user();
-
-        $viaRoutes = RouteStop::whereHas('collectionRoute', fn ($q) => $q->where('collector_id', $user->id))
-            ->with('producer.user')
-            ->get()
-            ->pluck('producer')
-            ->filter()
-            ->unique('id');
-
-        if ($viaRoutes->isNotEmpty()) {
-            return $viaRoutes;
-        }
-
-        if (! $user->comunidad) {
-            return collect();
-        }
-
-        return Producer::where('status', 'activo')->where('comunidad', $user->comunidad)->with('user')->get();
+        return Auth::user()->resolveAssignedProducers();
     }
 
     public function deliveryStore(StoreMilkDeliveryRequest $request, MilkDeliveryService $deliveryService)
@@ -215,11 +200,40 @@ class CollectorController extends Controller
         return view('collector.journal', compact('myRoute', 'todayDeliveries', 'totals'));
     }
 
+    public function payments()
+    {
+        $user = Auth::user();
+        $payments = $user->collectorPayments()->latest('period_month')->paginate(12);
+        $summary = [
+            'monthly_salary' => (float) $user->monthly_salary,
+            'paid_this_year' => $user->collectorPayments()->where('status', 'pagado')->whereYear('period_month', now()->year)->sum('total_amount'),
+            'pending' => $user->collectorPayments()->where('status', '!=', 'pagado')->sum('total_amount'),
+        ];
+        $latestPayment = $user->collectorPayments()->latest('period_month')->first();
+
+        return view('collector.payments', compact('payments', 'summary', 'latestPayment'));
+    }
+
+    public function paymentReceipt(CollectorPayment $collectorPayment)
+    {
+        if ($collectorPayment->collector_id !== Auth::id()) {
+            abort(403);
+        }
+        $collectorPayment->load('collector', 'processedBy');
+
+        return view('payments.collector-receipt', [
+            'payment' => $collectorPayment,
+            'backUrl' => route('collector.payments'),
+        ]);
+    }
+
     public function profile()
     {
         $user = Auth::user();
+        $assignedProducers = $user->resolveAssignedProducers()->sortBy(fn ($p) => $p->user->name ?? '');
+        $hasIndividualAssignment = $user->assignedProducers()->exists();
 
-        return view('collector.profile', compact('user'));
+        return view('collector.profile', compact('user', 'assignedProducers', 'hasIndividualAssignment'));
     }
 
     public function profileUpdate(Request $request)

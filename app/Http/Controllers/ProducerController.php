@@ -12,6 +12,7 @@ use App\Models\QualityReport;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class ProducerController extends Controller
 {
@@ -105,29 +106,53 @@ class ProducerController extends Controller
     public function payments(Request $request)
     {
         $producer = Auth::user()->producer;
-        $query = Payment::where('producer_id', $producer->id)->with('items.milkDelivery');
+        $allPayments = Payment::where('producer_id', $producer->id);
+
+        $query = (clone $allPayments);
         if ($status = $request->status) {
             $query->where('status', $status);
         }
-        $payments = $query->latest('period_end')->paginate(10)->withQueryString();
-        $summary = [
-            'total_pagado' => Payment::where('producer_id', $producer->id)->where('status', 'pagado')->sum('total_amount'),
-            'total_pendiente' => Payment::where('producer_id', $producer->id)->where('status', 'pendiente')->sum('total_amount'),
-            'total_bonos' => Payment::where('producer_id', $producer->id)->sum(\DB::raw('quality_bonus + production_bonus')),
-            'total_liters' => Payment::where('producer_id', $producer->id)->sum('total_liters'),
-        ];
+        if ($period = $request->period) {
+            $month = Carbon::parse($period.'-01');
+            $query->whereBetween('period_start', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()]);
+        }
+        $payments = $query->latest('period_end')->latest('id')->paginate(10)->withQueryString();
 
-        return view('producer.payments', compact('payments', 'summary'));
+        $summary = [
+            'total_pagado' => (clone $allPayments)->where('status', 'pagado')->sum('total_amount'),
+            'total_pendiente' => (clone $allPayments)->whereNotIn('status', ['pagado', 'rechazado'])->sum('total_amount'),
+            'total_bonos' => (clone $allPayments)->sum(DB::raw('quality_bonus + production_bonus')),
+            'total_liters' => (clone $allPayments)->sum('total_liters'),
+        ];
+        $latestPayment = (clone $allPayments)->latest('period_end')->latest('id')->first();
+
+        return view('producer.payments', compact('payments', 'summary', 'latestPayment'));
     }
 
     public function paymentShow(Payment $payment)
     {
-        if ($payment->producer_id !== Auth::user()->producer?->id) {
-            abort(403);
-        }
+        $this->ensureOwnsPayment($payment);
         $payment->load('items.milkDelivery.qualityReport', 'processedBy');
 
         return view('producer.payment-show', compact('payment'));
+    }
+
+    public function paymentReceipt(Payment $payment)
+    {
+        $this->ensureOwnsPayment($payment);
+        $payment->load('producer.user', 'items.milkDelivery', 'processedBy');
+
+        return view('payments.producer-receipt', [
+            'payment' => $payment,
+            'backUrl' => route('producer.payment-show', $payment),
+        ]);
+    }
+
+    private function ensureOwnsPayment(Payment $payment): void
+    {
+        if ($payment->producer_id !== Auth::user()->producer?->id) {
+            abort(403);
+        }
     }
 
     public function complaints()

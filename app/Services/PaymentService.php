@@ -142,8 +142,9 @@ class PaymentService
             ->where('status', '!=', 'rechazado')
             ->count();
 
-        // Si más del 90% de entregas tienen calidad aprobada, dar bono del 5%
-        if ($totalDeliveries > 0 && ($qualityReportsCount / $totalDeliveries) >= 0.9) {
+        // Bono del 5% si el porcentaje de entregas aprobadas alcanza el mínimo configurado.
+        $minApprovedRatio = (float) PlantConfig::getValue('bono_calidad_minimo_score', 90) / 100;
+        if ($totalDeliveries > 0 && ($qualityReportsCount / $totalDeliveries) >= $minApprovedRatio) {
             return round($base * 0.05, 2);
         }
 
@@ -155,8 +156,8 @@ class PaymentService
      */
     protected function calculateVolumeBonus(float $liters, float $base): float
     {
-        // Si supera 500 litros en el periodo, dar bono del 3%
-        if ($liters > 500) {
+        // Bono del 3% si supera los litros mínimos configurados en el período.
+        if ($liters > (float) PlantConfig::getValue('bono_volumen_minimo_litros', 500)) {
             return round($base * 0.03, 2);
         }
 

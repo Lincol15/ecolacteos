@@ -1,128 +1,63 @@
 @extends('layouts.app')
 
-@section('page-title', 'Detalle de Liquidación')
-@section('page-subtitle', 'Período ' . ($payment->period ?? ''))
+@section('page-title', 'Liquidación '.$payment->receipt_number)
+@section('page-subtitle', 'Del '.$payment->period_start?->format('d/m/Y').' al '.$payment->period_end?->format('d/m/Y'))
 
 @section('top-actions')
-    <a href="{{ route('producer.payments') }}" class="btn btn-ghost">
-        ← Volver a Pagos
-    </a>
+    <a href="{{ route('producer.payments') }}" class="btn btn-ghost">← Mis pagos</a>
 @endsection
 
 @section('content')
-<div class="stats-grid">
-    <div class="stat-card green">
-        <div class="stat-label">Total Litros</div>
-        <div class="stat-value green">{{ number_format($payment->total_liters ?? 0, 0) }} L</div>
-        <div class="stat-icon-wrap green">🥛</div>
+<section class="pay-hero">
+    <div>
+        <div class="pay-hero-label">Total neto a recibir</div>
+        <div class="pay-hero-amount">S/ {{ number_format($payment->total_amount, 2) }}</div>
+        <div class="pay-hero-meta">
+            <x-payment-status :status="$payment->status" />
+            <span>Método: {{ \App\Models\Payment::PAYMENT_METHODS[$payment->payment_method] ?? '—' }}</span>
+            @if($payment->status === 'pagado' && $payment->payment_date)
+            <span>Pagado el {{ $payment->payment_date->format('d/m/Y') }}</span>
+            @endif
+        </div>
     </div>
-    <div class="stat-card blue">
-        <div class="stat-label">Precio Promedio</div>
-        <div class="stat-value blue">S/{{ number_format($payment->avg_price_per_liter ?? 0, 3) }}</div>
-        <div class="stat-icon-wrap blue">💲</div>
+    <div class="pay-hero-actions">
+        <a href="{{ route('producer.payment-receipt', $payment) }}" class="btn-icon"><x-icon name="printer" /> Ver comprobante</a>
+        <a href="{{ route('producer.payment-receipt', ['payment' => $payment, 'download' => 1]) }}" class="btn-icon light"><x-icon name="download" /> Descargar PDF</a>
     </div>
-    <div class="stat-card amber">
-        <div class="stat-label">Bonos Aplicados</div>
-        <div class="stat-value amber">+S/{{ number_format($payment->bonuses_amount ?? 0, 2) }}</div>
-        <div class="stat-icon-wrap amber">🎁</div>
-    </div>
-    <div class="stat-card purple">
-        <div class="stat-label">TOTAL A PAGAR</div>
-        <div class="stat-value purple">S/{{ number_format($payment->total_amount ?? 0, 2) }}</div>
-        <div class="stat-icon-wrap purple">💵</div>
-    </div>
-</div>
+</section>
 
 <div class="grid-2">
     <div class="panel">
         <div class="panel-header">
-            <div class="panel-title">📊 Desglose del Cálculo</div>
+            <div class="panel-title">Cómo se calculó tu pago</div>
         </div>
         <div class="panel-body">
-            <div style="display:flex; flex-direction:column; gap:12px;">
-                <div style="display:flex; justify-content:space-between; padding:12px 14px; background:#f8fafc; border-radius:10px;">
-                    <span><strong>Base</strong> ({{ number_format($payment->total_liters ?? 0, 0) }}L × S/{{ number_format($payment->avg_price_per_liter ?? 0, 3) }})</span>
-                    <strong>S/{{ number_format($payment->base_amount ?? 0, 2) }}</strong>
+            <div class="pay-breakdown">
+                <div class="pay-line">
+                    <span>Leche entregada: {{ number_format($payment->total_liters, 2) }} L × S/ {{ number_format($payment->precio_por_litro ?? $payment->avg_price_per_liter, 2) }}</span>
+                    <strong>S/ {{ number_format($payment->base_amount, 2) }}</strong>
                 </div>
-
-                <div style="padding:14px; background:linear-gradient(135deg, #ecfeff, #f0fdf4); border-radius:12px; border:1px solid #6ee7b7;">
-                    <div style="font-weight:700; margin-bottom:10px; color:#065f46;">🎁 Bonos / Incentivos</div>
-                    <div style="display:flex; flex-direction:column; gap:8px;">
-                        @forelse($payment->items ?? [] as $item)
-                            @if(($item->type ?? '') == 'bono')
-                            <div style="display:flex; justify-content:space-between; font-size:13px;">
-                                <span>{{ $item->description ?? 'Bono calidad' }}</span>
-                                <span style="color:#059669; font-weight:600;">+S/{{ number_format($item->amount ?? 0, 2) }}</span>
-                            </div>
-                            @endif
-                        @empty
-                            <div style="display:flex; justify-content:space-between; font-size:13px;">
-                                <span>🎖️ Bono por calidad (≥85 puntos)</span>
-                                <span style="color:#059669; font-weight:600;">+S/{{ number_format(($payment->bonuses_amount ?? 0) * 0.6, 2) }}</span>
-                            </div>
-                            <div style="display:flex; justify-content:space-between; font-size:13px;">
-                                <span>📈 Bono por volumen</span>
-                                <span style="color:#059669; font-weight:600;">+S/{{ number_format(($payment->bonuses_amount ?? 0) * 0.4, 2) }}</span>
-                            </div>
-                        @endforelse
-                        <div style="display:flex; justify-content:space-between; padding-top:8px; border-top:1px dashed #10b981; font-weight:700;">
-                            <span>Total Bonos</span>
-                            <span style="color:#059669;">+S/{{ number_format($payment->bonuses_amount ?? 0, 2) }}</span>
-                        </div>
-                    </div>
+                <div class="pay-line">
+                    <span>Bono por calidad</span>
+                    <strong class="pay-plus">+ S/ {{ number_format($payment->quality_bonus, 2) }}</strong>
                 </div>
-
-                <div style="padding:14px; background:linear-gradient(135deg, #fef3c7, #fee2e2); border-radius:12px; border:1px solid #fca5a5;">
-                    <div style="font-weight:700; margin-bottom:10px; color:#991b1b;">⚖️ Deducciones</div>
-                    <div style="display:flex; flex-direction:column; gap:8px;">
-                        @forelse($payment->items ?? [] as $item)
-                            @if(($item->type ?? '') == 'deduccion')
-                            <div style="display:flex; justify-content:space-between; font-size:13px;">
-                                <span>{{ $item->description ?? 'Deducción' }}</span>
-                                <span style="color:#dc2626; font-weight:600;">-S/{{ number_format($item->amount ?? 0, 2) }}</span>
-                            </div>
-                            @endif
-                        @empty
-                            <div style="display:flex; justify-content:space-between; font-size:13px;">
-                                <span>📄 Retención (8%)</span>
-                                <span style="color:#dc2626; font-weight:600;">-S/{{ number_format(($payment->deductions_amount ?? 0) * 0.6, 2) }}</span>
-                            </div>
-                            <div style="display:flex; justify-content:space-between; font-size:13px;">
-                                <span>⚖️ Aportes / Fondos</span>
-                                <span style="color:#dc2626; font-weight:600;">-S/{{ number_format(($payment->deductions_amount ?? 0) * 0.4, 2) }}</span>
-                            </div>
-                        @endforelse
-                        <div style="display:flex; justify-content:space-between; padding-top:8px; border-top:1px dashed #ef4444; font-weight:700;">
-                            <span>Total Deducciones</span>
-                            <span style="color:#dc2626;">-S/{{ number_format($payment->deductions_amount ?? 0, 2) }}</span>
-                        </div>
-                    </div>
+                <div class="pay-line">
+                    <span>Bono por volumen</span>
+                    <strong class="pay-plus">+ S/ {{ number_format($payment->production_bonus, 2) }}</strong>
                 </div>
-
-                <div style="display:flex; justify-content:space-between; padding:18px; background:linear-gradient(135deg, #065f46, #0891b2); border-radius:14px; color:#fff;">
-                    <div>
-                        <div style="font-size:12px; opacity:0.8;">TOTAL NETO A PAGAR</div>
-                        <div style="font-size:20px; font-weight:800; letter-spacing:-0.5px;">S/{{ number_format($payment->total_amount ?? 0, 2) }}</div>
-                    </div>
-                    <div style="text-align:right;">
-                        <div style="font-size:12px; opacity:0.8;">ESTADO</div>
-                        <span class="badge" style="background:rgba(255,255,255,0.25); color:#fff;">
-                            {{ match($payment->status) {
-                                'pendiente' => '❌ Pendiente',
-                                'procesando' => '⏳ Procesando',
-                                'pagado' => '✅ Pagado',
-                                default => ucfirst($payment->status)
-                            } }}
-                        </span>
-                        <div style="font-size:11px; margin-top:4px; opacity:0.8;">
-                            Pago: {{ match($payment->payment_method) {
-                                'transferencia' => '🏦 Transferencia',
-                                'efectivo' => '💵 Efectivo',
-                                'cheque' => '📄 Cheque',
-                                default => $payment->payment_method ?? '—'
-                            } }}
-                        </div>
-                    </div>
+                <div class="pay-line">
+                    <span>{{ $payment->deductions_detail ?? 'Deducciones' }}</span>
+                    <strong class="pay-minus">− S/ {{ number_format($payment->deductions, 2) }}</strong>
+                </div>
+                @if($payment->llevado_a_planta > 0)
+                <div class="pay-line">
+                    <span>Leche llevada directo a planta</span>
+                    <strong class="pay-minus">− S/ {{ number_format($payment->llevado_a_planta, 2) }}</strong>
+                </div>
+                @endif
+                <div class="pay-line total">
+                    <span>Total neto</span>
+                    <strong>S/ {{ number_format($payment->total_amount, 2) }}</strong>
                 </div>
             </div>
         </div>
@@ -130,54 +65,60 @@
 
     <div class="panel">
         <div class="panel-header">
-            <div class="panel-title">📦 Entregas Incluidas en la Liquidación</div>
+            <div class="panel-title">Litros por día</div>
         </div>
         <div class="panel-body">
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Fecha</th>
-                            <th>Litros</th>
-                            <th>Precio/L</th>
-                            <th>Subtotal</th>
-                            <th>Calidad</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse($payment->items ?? [] as $item)
-                            @if(($item->delivery ?? false))
-                            <tr>
-                                <td>{{ $item->delivery->delivery_date ? \Carbon\Carbon::parse($item->delivery->delivery_date)->format('d/m/Y') : '—' }}</td>
-                                <td>{{ number_format($item->delivery->liters ?? 0, 1) }} L</td>
-                                <td>S/{{ number_format($item->delivery->price_per_liter ?? 0, 3) }}</td>
-                                <td><strong>S/{{ number_format($item->delivery->total_amount ?? 0, 2) }}</strong></td>
-                                <td>
-                                    @if(isset($item->delivery->qualityReport))
-                                        <span class="badge badge-{{ $item->delivery->qualityReport->result == 'aprobado' ? 'green' : 'amber' }}">
-                                            {{ number_format($item->delivery->qualityReport->score, 0) }}/100
-                                        </span>
-                                    @else
-                                        <span class="badge badge-gray">—</span>
-                                    @endif
-                                </td>
-                            </tr>
-                            @endif
-                        @empty
-                            @for($i = 0; $i < min(6, max(1, floor(($payment->total_liters ?? 500) / 100))); $i++)
-                            <tr>
-                                <td>{{ \Carbon\Carbon::now()->subDays($i * 5 + 3)->format('d/m/Y') }}</td>
-                                <td>{{ number_format(80 + $i * 12, 1) }} L</td>
-                                <td>S/{{ number_format(1.25, 3) }}</td>
-                                <td><strong>S/{{ number_format((80 + $i * 12) * 1.25, 2) }}</strong></td>
-                                <td><span class="badge badge-green">{{ 80 + $i * 3 }}/100</span></td>
-                            </tr>
-                            @endfor
-                        @endforelse
-                    </tbody>
-                </table>
+            @if(!empty($payment->detalle_diario))
+            <div class="pay-days">
+                @foreach($payment->detalle_diario as $day => $liters)
+                <div class="pay-day">
+                    <small>{{ mb_substr($day, 0, 3) }}</small>
+                    <strong>{{ number_format($liters, 1) }}</strong>
+                </div>
+                @endforeach
             </div>
+            @else
+            <div class="empty" style="padding:20px"><p>Sin detalle diario para esta liquidación.</p></div>
+            @endif
+
+            @if($payment->status === 'pagado')
+            <div class="pay-breakdown" style="margin-top:20px">
+                <div class="pay-line"><span>N° de operación</span><strong>{{ $payment->transaction_number ?? '—' }}</strong></div>
+                <div class="pay-line"><span>Fecha de pago</span><strong>{{ $payment->payment_date?->format('d/m/Y') ?? '—' }}</strong></div>
+            </div>
+            @endif
         </div>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-header">
+        <div class="panel-title">Entregas incluidas ({{ $payment->items->count() }})</div>
+    </div>
+    <div class="table-wrap">
+        <table class="pay-table">
+            <thead><tr><th>Fecha</th><th>Hora</th><th>Litros</th><th>Precio/L</th><th>Calidad</th><th style="text-align:right">Importe</th></tr></thead>
+            <tbody>
+                @forelse($payment->items as $item)
+                <tr>
+                    <td>{{ $item->milkDelivery?->delivery_date?->format('d/m/Y') ?? '—' }}</td>
+                    <td>{{ $item->milkDelivery?->delivery_time?->format('H:i') ?? '—' }}</td>
+                    <td><strong>{{ number_format($item->liters, 2) }} L</strong></td>
+                    <td>S/ {{ number_format($item->price_per_liter, 2) }}</td>
+                    <td>
+                        @if($item->milkDelivery?->qualityReport)
+                        <span class="badge {{ $item->milkDelivery->qualityReport->result === 'aprobado' ? 'badge-green' : 'badge-amber' }}">{{ ucfirst($item->milkDelivery->qualityReport->result) }}</span>
+                        @else
+                        <span class="pay-muted">Sin análisis</span>
+                        @endif
+                    </td>
+                    <td class="pay-amount" style="text-align:right">S/ {{ number_format($item->line_amount, 2) }}</td>
+                </tr>
+                @empty
+                <tr><td colspan="6"><div class="empty"><h3>Sin detalle de entregas</h3></div></td></tr>
+                @endforelse
+            </tbody>
+        </table>
     </div>
 </div>
 @endsection
