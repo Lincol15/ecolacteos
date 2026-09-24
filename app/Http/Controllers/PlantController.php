@@ -14,7 +14,6 @@ use App\Models\Recipe;
 use App\Models\RecipeIngredient;
 use App\Models\Sale;
 use App\Models\SaleItem;
-use App\Models\User;
 use App\Services\ProductionBatchService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -115,28 +114,29 @@ class PlantController extends Controller
         $ingredientMovements = IngredientMovement::with('ingredient', 'processedBy', 'productionBatch')
             ->whereHas('ingredient', fn ($q) => $q->where('is_milk', false))
             ->latest()->limit(30)->get();
-        $milkReceivedToday = MilkDelivery::where('delivery_date', Carbon::today()->toDateString())
-            ->where('recibido', true)
-            ->where('status', '!=', 'rechazado')
-            ->sum('liters');
+        $milkReport = MilkDelivery::receivedByDay($request->milk_from, $request->milk_to);
 
-        return view('plant.production', compact('tab', 'batches', 'recipes', 'stats', 'ingredients', 'ingredientMovements', 'milkReceivedToday'));
+        return view('plant.production', compact('tab', 'batches', 'recipes', 'stats', 'ingredients', 'ingredientMovements', 'milkReport'));
     }
 
     public function productionCreate(ProductionBatchService $service)
     {
-        $products = Product::where('is_active', true)->orderBy('name')->get();
-        $recipesForJs = $service->recipesForJs(Recipe::where('active', true)->with('nonMilkIngredients.ingredient')->get());
-        $supervisors = User::whereIn('role', ['trabajador_planta', 'gerente', 'admin'])->get();
-        // La leche registrada por el acopiador queda disponible de inmediato; solo se descarta la rechazada.
-        $deliveries = MilkDelivery::where('status', '!=', 'rechazado')
-            ->whereDoesntHave('batches')
-            ->with('producer.user')
-            ->latest()->limit(50)->get();
+        $activeRecipes = Recipe::where('active', true)->with('nonMilkIngredients.ingredient')->get();
+        $recipesForJs = $service->recipesForJs($activeRecipes);
+        // Solo se puede producir lo que tiene receta: de ella salen la leche y los insumos.
+        $products = Product::where('is_active', true)->whereIn('id', $activeRecipes->pluck('product_id'))->orderBy('name')->get();
+        // La leche se toma sola de las entregas más antiguas disponibles (ver ProductionBatchService).
+        $availableMilk = $service->availableMilkQuery()->with('producer.user')->get()
+            ->map(fn ($d) => [
+                'id' => $d->id,
+                'liters' => (float) $d->liters,
+                'date' => $d->delivery_date?->format('d/m/Y'),
+                'producer' => $d->producer?->user?->fullname ?? 'Productor',
+            ])->values();
         $ingredientStocks = Ingredient::where('active', true)->where('is_milk', false)->get()
             ->map(fn ($i) => ['id' => $i->id, 'name' => $i->name, 'unit' => $i->unit, 'stock' => $i->currentStock()])->values();
 
-        return view('plant.production-create', compact('products', 'recipesForJs', 'supervisors', 'deliveries', 'ingredientStocks'));
+        return view('plant.production-create', compact('products', 'recipesForJs', 'availableMilk', 'ingredientStocks'));
     }
 
     public function productionStore(StoreProductionCartRequest $request, ProductionBatchService $service)
@@ -146,7 +146,7 @@ class PlantController extends Controller
         try {
             $batches = $service->createCart(
                 $data['items'],
-                $data['milk_ids'],
+                $data['milk_ids'] ?? null,
                 [
                     'production_date' => $data['production_date'],
                     'status' => $data['status'],
@@ -182,8 +182,10 @@ class PlantController extends Controller
             'name' => 'required|string|max:150',
             'instructions' => 'nullable|string|max:2000',
             'ingredients' => 'required|array|min:1',
-            'ingredients.*.ingredient_id' => 'required|exists:ingredients,id',
+            'ingredients.*.ingredient_id' => 'required|distinct|exists:ingredients,id',
             'ingredients.*.quantity_per_unit' => 'required|numeric|min:0.001|max:100000',
+        ], [
+            'ingredients.*.ingredient_id.distinct' => 'No repitas el mismo insumo en la receta.',
         ]);
 
         return DB::transaction(function () use ($data) {
@@ -210,6 +212,17 @@ class PlantController extends Controller
 
             return redirect()->route('plant.production', ['tab' => 'recetas'])->with('success', 'Receta creada correctamente.');
         });
+    }
+
+    /**
+     * Elimina la receta y sus ingredientes. Los lotes ya producidos no dependen de la receta.
+     */
+    public function recipeDestroy(Recipe $recipe)
+    {
+        $name = $recipe->name;
+        $recipe->delete();
+
+        return redirect()->route('plant.production', ['tab' => 'recetas'])->with('success', "Receta \"{$name}\" eliminada.");
     }
 
     public function sales(Request $request)

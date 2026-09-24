@@ -61,10 +61,19 @@ class StoreMilkDeliveryRequest extends FormRequest
      */
     protected function prepareForValidation(): void
     {
-        // Normalizar datos si es necesario
         if ($this->has('liters')) {
             $this->merge([
                 'liters' => (float) str_replace(',', '.', (string) $this->liters),
+            ]);
+        }
+
+        // El acopiador solo registra productor, litros y observaciones. Fecha, vehículo
+        // (asignado por el admin) y precio (configurado por el admin) son automáticos.
+        if ($this->user()?->role === 'acopiador') {
+            $this->replace($this->except(['price_per_liter', 'temperature', 'container_type', 'containers_count']));
+            $this->merge([
+                'delivery_date' => now()->toDateString(),
+                'vehicle_plate' => $this->user()->vehiculo ? mb_substr($this->user()->vehiculo, 0, 10) : null,
             ]);
         }
     }

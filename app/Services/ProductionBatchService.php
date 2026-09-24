@@ -101,6 +101,54 @@ class ProductionBatchService
     }
 
     /**
+     * Entregas de leche disponibles para producir: no rechazadas y aún no usadas en un lote,
+     * de la más antigua a la más reciente.
+     */
+    public function availableMilkQuery()
+    {
+        return MilkDelivery::where('status', '!=', 'rechazado')
+            ->whereDoesntHave('batches')
+            ->orderBy('delivery_date')
+            ->orderBy('id');
+    }
+
+    /**
+     * Toma las entregas más antiguas (primero en entrar, primero en salir) hasta cubrir la
+     * leche que piden las recetas del carrito. Cada entrega se usa completa.
+     *
+     * @param  Collection<int, array>  $lines
+     * @return Collection<int, MilkDelivery>
+     */
+    public function pickMilkAutomatically(Collection $lines): Collection
+    {
+        $withoutRecipe = $lines->filter(fn ($line) => ! $line['recipe'])->map(fn ($line) => $line['product']?->name);
+        if ($withoutRecipe->isNotEmpty()) {
+            throw new \RuntimeException('Sin receta activa para: '.$withoutRecipe->implode(', ').'. Crea su receta en la pestaña Recetas.');
+        }
+
+        $needed = round((float) $lines->sum('milk_needed'), 2);
+        if ($needed <= 0) {
+            throw new \RuntimeException('Las recetas del carrito no indican litros de leche. Revisa las recetas.');
+        }
+
+        $picked = collect();
+        $total = 0.0;
+        foreach ($this->availableMilkQuery()->get() as $delivery) {
+            if ($total >= $needed) {
+                break;
+            }
+            $picked->push($delivery);
+            $total += (float) $delivery->liters;
+        }
+
+        if ($total < $needed) {
+            throw new \RuntimeException("Leche insuficiente: se necesitan {$needed} L y solo hay ".round($total, 2).' L disponibles.');
+        }
+
+        return $picked;
+    }
+
+    /**
      * Reparte las entregas de leche seleccionadas entre las líneas del carrito, según
      * cuánta leche necesita cada una (partiendo una misma entrega entre lotes si hace falta).
      *
@@ -159,24 +207,25 @@ class ProductionBatchService
      * disponibles para el conjunto y solo confirma si alcanza para todas las líneas.
      *
      * @param  array<int, array{product_id:int, output_units:float, expiration_date?:?string}>  $items
-     * @param  array<int, int>  $milkDeliveryIds
+     * @param  array<int, int>|null  $milkDeliveryIds  entregas elegidas a mano; null = tomar automáticamente las más antiguas
      * @param  array{production_date:string, status:string, supervised_by:?int, recipe_notes:?string, quality_notes:?string}  $shared
      * @return Collection<int, ProductionBatch>
      *
-     * @throws \RuntimeException cuando la leche seleccionada ya no está disponible o faltan insumos
+     * @throws \RuntimeException cuando la leche no está disponible o faltan insumos
      */
-    public function createCart(array $items, array $milkDeliveryIds, array $shared, int $processedBy): Collection
+    public function createCart(array $items, ?array $milkDeliveryIds, array $shared, int $processedBy): Collection
     {
-        $deliveries = MilkDelivery::whereIn('id', $milkDeliveryIds)
-            ->where('status', '!=', 'rechazado')
-            ->whereDoesntHave('batches')
-            ->get();
-
-        if ($deliveries->count() !== count($milkDeliveryIds)) {
-            throw new \RuntimeException('Una o más entregas de leche seleccionadas ya no están disponibles (fueron usadas en otro lote o fueron rechazadas).');
-        }
-
         $plan = $this->planCart($items);
+
+        if ($milkDeliveryIds === null) {
+            $deliveries = $this->pickMilkAutomatically($plan['lines']);
+        } else {
+            $deliveries = $this->availableMilkQuery()->whereIn('id', $milkDeliveryIds)->get();
+
+            if ($deliveries->count() !== count($milkDeliveryIds)) {
+                throw new \RuntimeException('Una o más entregas de leche seleccionadas ya no están disponibles (fueron usadas en otro lote o fueron rechazadas).');
+            }
+        }
 
         $shortages = $this->ingredientShortages($plan['ingredientNeeds']);
         if (! empty($shortages)) {

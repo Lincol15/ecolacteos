@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Collection;
 
 class MilkDelivery extends Model
 {
@@ -105,5 +107,48 @@ class MilkDelivery extends Model
     {
         return $this->belongsToMany(ProductionBatch::class, 'batch_milk_usage')
             ->withPivot('liters_used');
+    }
+
+    /**
+     * Leche recibida (entregas no rechazadas) por día en un rango de fechas.
+     * Sin fechas, muestra solo el día de hoy. El rango se limita a 92 días.
+     *
+     * @return array{from: Carbon, to: Carbon, days: Collection<int, array{date: Carbon, liters: float, deliveries: int}>, total_liters: float, total_deliveries: int}
+     */
+    public static function receivedByDay(?string $from, ?string $to): array
+    {
+        $to = $to ? Carbon::parse($to)->startOfDay() : Carbon::today();
+        $from = $from ? Carbon::parse($from)->startOfDay() : $to->copy();
+        if ($from->gt($to)) {
+            [$from, $to] = [$to, $from];
+        }
+        if ($from->diffInDays($to) > 91) {
+            $from = $to->copy()->subDays(91);
+        }
+
+        $rows = self::where('status', '!=', 'rechazado')
+            ->whereBetween('delivery_date', [$from->toDateString(), $to->toDateString()])
+            ->selectRaw('DATE(delivery_date) as day, SUM(liters) as liters, COUNT(*) as deliveries')
+            ->groupBy('day')
+            ->get()
+            ->keyBy(fn ($row) => Carbon::parse($row->day)->toDateString());
+
+        $days = collect();
+        for ($day = $to->copy(); $day->gte($from); $day->subDay()) {
+            $row = $rows->get($day->toDateString());
+            $days->push([
+                'date' => $day->copy(),
+                'liters' => round((float) ($row->liters ?? 0), 2),
+                'deliveries' => (int) ($row->deliveries ?? 0),
+            ]);
+        }
+
+        return [
+            'from' => $from,
+            'to' => $to,
+            'days' => $days,
+            'total_liters' => round($days->sum('liters'), 2),
+            'total_deliveries' => $days->sum('deliveries'),
+        ];
     }
 }

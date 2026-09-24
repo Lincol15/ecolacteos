@@ -14,34 +14,72 @@
 @if($tab === 'recetas')
 <div class="panel">
     <div class="panel-header">
-        <div class="panel-title">📖 Recetas de Producción</div>
+        <div>
+            <div class="panel-title">📖 Recetas de Producción</div>
+            <div class="form-hint" style="margin-top:4px">Qué ingredientes lleva cada producto. Las cantidades totales se calculan solas en Producción.</div>
+        </div>
         <a href="{{ route('plant.recipe-create') }}" class="btn btn-sm btn-primary">➕ Nueva Receta</a>
     </div>
-    <div class="panel-body" style="padding-top:8px;">
-        @forelse($recipes as $r)
-        <div style="padding:16px 0; border-bottom:1px solid #f1f5f9;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <div>
-                    <strong style="font-size:15px;">{{ $r->name }}</strong>
-                    <div style="font-size:12px; color:var(--text-light);">Producto terminado: {{ $r->product?->name ?? 'N/A' }}</div>
-                </div>
-                <span class="badge {{ $r->active ? 'badge-green' : 'badge-gray' }}">{{ $r->active ? 'Activa' : 'Inactiva' }}</span>
-            </div>
-            <div style="display:flex; flex-wrap:wrap; gap:8px;">
-                @forelse($r->recipeIngredients as $ri)
-                <span class="badge {{ $ri->ingredient?->is_milk ? 'badge-blue' : 'badge-gray' }}">
-                    {{ $ri->ingredient?->is_milk ? '🥛' : '🧂' }} {{ $ri->ingredient?->name ?? 'N/A' }}: {{ number_format($ri->quantity_per_unit, 2) }} {{ $ri->ingredient?->unit }}
-                </span>
-                @empty
-                <span style="font-size:12px; color:var(--text-light);">Sin ingredientes registrados.</span>
-                @endforelse
-            </div>
+    <div class="panel-body">
+        @if($recipes->isEmpty())
+        <div class="empty"><div class="empty-icon">📖</div><h3>Sin recetas registradas</h3><p>Crea la primera receta para poder producir.</p></div>
+        @else
+        <div class="recipe-grid">
+            @foreach($recipes as $r)
+            <article class="recipe-card">
+                <header class="recipe-head">
+                    <div>
+                        <div class="recipe-product">{{ $r->product?->name ?? 'Producto eliminado' }}</div>
+                        <div class="recipe-name">{{ $r->name }} · por 1 {{ $r->product?->unit ?? 'und' }}</div>
+                    </div>
+                    <span class="badge {{ $r->active ? 'badge-green' : 'badge-gray' }}">{{ $r->active ? 'Activa' : 'Inactiva' }}</span>
+                </header>
+
+                <ul class="recipe-ingredients">
+                    @forelse($r->recipeIngredients as $ri)
+                    <li>
+                        <span>{{ $ri->ingredient?->is_milk ? '🥛' : '🧂' }} {{ $ri->ingredient?->name ?? 'Insumo eliminado' }}</span>
+                        <strong>{{ rtrim(rtrim(number_format($ri->quantity_per_unit, 3, '.', ''), '0'), '.') }} {{ $ri->ingredient?->unit }}</strong>
+                    </li>
+                    @empty
+                    <li class="recipe-empty">Sin ingredientes registrados.</li>
+                    @endforelse
+                </ul>
+
+                @if($r->instructions)
+                <details class="recipe-instructions">
+                    <summary>Ver instrucciones</summary>
+                    <p>{{ $r->instructions }}</p>
+                </details>
+                @endif
+
+                <footer class="recipe-foot">
+                    <form method="POST" action="{{ route('plant.recipe-destroy', $r) }}" onsubmit="return confirm('¿Eliminar la receta &quot;{{ $r->name }}&quot;? Los lotes ya producidos no se modifican.')">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="btn btn-sm btn-ghost" style="color:#B42318">🗑️ Eliminar receta</button>
+                    </form>
+                </footer>
+            </article>
+            @endforeach
         </div>
-        @empty
-        <div class="empty"><div class="empty-icon">📖</div><h3>Sin recetas registradas</h3><p>Crea la primera receta para agilizar la carga de producción.</p></div>
-        @endforelse
+        @endif
     </div>
 </div>
+
+<style>
+    .recipe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+    .recipe-card { border: 1px solid var(--border); border-radius: 16px; padding: 18px; background: #fff; display: flex; flex-direction: column; gap: 12px; }
+    .recipe-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+    .recipe-product { font-family: 'Poppins', 'Inter', sans-serif; font-size: 16px; font-weight: 700; }
+    .recipe-name { font-size: 12.5px; color: var(--text-light); }
+    .recipe-ingredients { list-style: none; display: grid; gap: 6px; }
+    .recipe-ingredients li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 12px; border-radius: 10px; background: #F6FBF8; font-size: 14px; }
+    .recipe-ingredients .recipe-empty { color: var(--text-light); background: none; padding: 0; }
+    .recipe-instructions summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--primary); }
+    .recipe-instructions p { font-size: 13px; color: var(--text-light); margin-top: 6px; white-space: pre-line; }
+    .recipe-foot { display: flex; justify-content: flex-end; margin-top: auto; padding-top: 6px; border-top: 1px dashed var(--border); }
+</style>
 @endif
 
 @if($tab === 'insumos')
@@ -54,13 +92,9 @@
         <x-ingredient-stock-note :ingredient="$ing" />
     </div>
     @endforeach
-    <div class="stat-card cyan">
-        <div class="stat-icon-wrap cyan">🚛</div>
-        <div class="stat-label">Leche Recibida Hoy</div>
-        <div class="stat-value" style="color:#0891b2">{{ number_format($milkReceivedToday, 2) }} L</div>
-        <div style="font-size:11px; color:var(--text-light); margin-top:4px;">Entregas ya analizadas por Calidad hoy</div>
-    </div>
 </div>
+
+<x-milk-received-by-day :report="$milkReport" :action="route('plant.production')" :hidden="['tab' => 'insumos']" />
 
 <div class="panel" style="background:#f8fafc;">
     <div class="panel-body" style="font-size:13px; color:var(--text-light);">

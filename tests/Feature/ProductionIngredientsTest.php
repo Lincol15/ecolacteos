@@ -153,11 +153,13 @@ class ProductionIngredientsTest extends TestCase
         $this->assertDatabaseCount('production_batches', 0);
     }
 
-    public function test_production_requires_at_least_one_milk_delivery(): void
+    public function test_production_fails_when_there_is_not_enough_milk_available(): void
     {
         [$product] = $this->makeRecipe();
         $plantWorker = User::factory()->create(['role' => 'trabajador_planta', 'active' => true]);
+        $this->makeApprovedDelivery(4);
 
+        // La receta pide 5 L por unidad: 2 unidades = 10 L, solo hay 4 L.
         $response = $this->actingAs($plantWorker)->post(route('plant.production-store'), [
             'items' => [
                 ['product_id' => $product->id, 'output_units' => 2],
@@ -166,8 +168,81 @@ class ProductionIngredientsTest extends TestCase
             'status' => 'en_proceso',
         ]);
 
-        $response->assertSessionHasErrors('milk_ids');
+        $response->assertSessionHas('error', fn (string $message) => str_contains($message, 'Leche insuficiente'));
         $this->assertDatabaseCount('production_batches', 0);
+    }
+
+    public function test_production_takes_the_oldest_milk_deliveries_automatically(): void
+    {
+        [$product] = $this->makeRecipe();
+        $plantWorker = User::factory()->create(['role' => 'trabajador_planta', 'active' => true]);
+        $oldest = $this->makeApprovedDelivery(6);
+        $oldest->update(['delivery_date' => now()->subDays(3)->toDateString()]);
+        $middle = $this->makeApprovedDelivery(6);
+        $middle->update(['delivery_date' => now()->subDays(2)->toDateString()]);
+        $newest = $this->makeApprovedDelivery(6);
+        $newest->update(['delivery_date' => now()->toDateString()]);
+
+        // 2 unidades × 5 L = 10 L: alcanza con las dos entregas más antiguas.
+        $this->actingAs($plantWorker)->post(route('plant.production-store'), [
+            'items' => [
+                ['product_id' => $product->id, 'output_units' => 2],
+            ],
+            'production_date' => now()->toDateString(),
+            'status' => 'en_proceso',
+        ])->assertRedirect(route('plant.production', ['tab' => 'historial']));
+
+        $batch = ProductionBatch::firstOrFail();
+        $usedIds = $batch->milkDeliveries()->pluck('milk_deliveries.id')->all();
+        $this->assertEqualsCanonicalizing([$oldest->id, $middle->id], $usedIds);
+        $this->assertNotContains($newest->id, $usedIds);
+    }
+
+    public function test_plant_worker_can_delete_a_recipe_and_keeps_existing_batches(): void
+    {
+        [$product] = $this->makeRecipe();
+        $plantWorker = User::factory()->create(['role' => 'trabajador_planta', 'active' => true]);
+        $this->makeApprovedDelivery(10);
+        $this->actingAs($plantWorker)->post(route('plant.production-store'), [
+            'items' => [['product_id' => $product->id, 'output_units' => 2]],
+            'production_date' => now()->toDateString(),
+            'status' => 'en_proceso',
+        ]);
+        $recipe = Recipe::firstOrFail();
+
+        $this->actingAs($plantWorker)->get(route('plant.production-create'))
+            ->assertOk()
+            ->assertSee('Productos a elaborar')
+            ->assertDontSee('Leche necesaria')
+            ->assertDontSee('milk_ids[]', false)
+            ->assertDontSee('Notas de Receta');
+        $this->actingAs($plantWorker)->get(route('plant.production', ['tab' => 'recetas']))
+            ->assertOk()
+            ->assertSee('Sal Test')
+            ->assertDontSee('Cantidad a producir')
+            ->assertSee('Eliminar receta');
+
+        $this->actingAs($plantWorker)->delete(route('plant.recipe-destroy', $recipe))
+            ->assertRedirect(route('plant.production', ['tab' => 'recetas']));
+
+        $this->assertDatabaseMissing('recipes', ['id' => $recipe->id]);
+        $this->assertDatabaseMissing('recipe_ingredients', ['recipe_id' => $recipe->id]);
+        $this->assertDatabaseCount('production_batches', 1);
+    }
+
+    public function test_recipe_cannot_repeat_the_same_ingredient(): void
+    {
+        [$product, $sal] = $this->makeRecipe();
+        $plantWorker = User::factory()->create(['role' => 'trabajador_planta', 'active' => true]);
+
+        $this->actingAs($plantWorker)->post(route('plant.recipe-store'), [
+            'product_id' => $product->id,
+            'name' => 'Receta repetida',
+            'ingredients' => [
+                ['ingredient_id' => $sal->id, 'quantity_per_unit' => 10],
+                ['ingredient_id' => $sal->id, 'quantity_per_unit' => 20],
+            ],
+        ])->assertSessionHasErrors('ingredients.1.ingredient_id');
     }
 
     public function test_production_rejects_milk_delivery_already_used_in_another_batch(): void

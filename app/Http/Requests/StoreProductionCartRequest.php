@@ -19,7 +19,7 @@ class StoreProductionCartRequest extends FormRequest
             'supervised_by' => 'nullable|exists:users,id',
             'recipe_notes' => 'nullable|string|max:2000',
             'quality_notes' => 'nullable|string|max:2000',
-            'milk_ids' => 'required|array|min:1',
+            'milk_ids' => 'nullable|array|min:1',
             'milk_ids.*' => 'exists:milk_deliveries,id',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',

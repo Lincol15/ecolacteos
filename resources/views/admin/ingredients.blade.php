@@ -13,15 +13,52 @@
         <x-ingredient-stock-note :ingredient="$ing" milkLabel="Disponible para producción (registrada por el acopiador)" />
     </div>
     @endforeach
-    <div class="stat-card cyan">
-        <div class="stat-icon-wrap cyan">🚛</div>
-        <div class="stat-label">Leche Recibida Hoy</div>
-        <div class="stat-value" style="color:#0891b2">{{ number_format($milkReceivedToday, 2) }} L</div>
-        <div style="font-size:11px; color:var(--text-light); margin-top:4px;">Entregas ya analizadas por Calidad hoy</div>
+</div>
+
+<x-milk-received-by-day :report="$milkReport" :action="route('admin.ingredients')" />
+
+@if(auth()->user()->isAdmin())
+<div class="panel">
+    <div class="panel-header">
+        <div class="panel-title">📦 Insumos Registrados</div>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Insumo</th><th>Unidad</th><th>Stock actual</th><th>Stock mínimo</th><th>Usado en recetas</th><th style="text-align:right">Acciones</th></tr></thead>
+            <tbody>
+                @foreach($ingredients as $ing)
+                <tr>
+                    <td><strong>{{ $ing->name }}</strong></td>
+                    <td>{{ \App\Models\Ingredient::UNITS[$ing->unit] ?? $ing->unit }}</td>
+                    <td style="font-weight:700">{{ number_format($ing->currentStock(), 2) }} {{ $ing->unit }}</td>
+                    <td>{{ $ing->min_stock !== null ? number_format($ing->min_stock, 2).' '.$ing->unit : '—' }}</td>
+                    <td>
+                        @if($ing->recipe_ingredients_count > 0)
+                        <span class="badge badge-blue">{{ $ing->recipe_ingredients_count }} receta(s)</span>
+                        @else
+                        <span style="color:var(--text-light); font-size:12px;">No</span>
+                        @endif
+                    </td>
+                    <td style="text-align:right">
+                        @if($ing->is_milk)
+                        <span class="badge badge-gray" title="La leche es un insumo del sistema">🔒 Del sistema</span>
+                        @elseif($ing->recipe_ingredients_count > 0)
+                        <button type="button" class="btn btn-sm btn-ghost" disabled style="opacity:.55; cursor:not-allowed;" title="Quítalo primero de las recetas que lo usan">🗑️ Eliminar</button>
+                        @else
+                        <form method="POST" action="{{ route('admin.ingredient-destroy', $ing) }}" onsubmit="return confirm('¿Eliminar el insumo &quot;{{ $ing->name }}&quot;? Ya no aparecerá en compras ni producción.')" style="display:inline">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="btn btn-sm btn-danger">🗑️ Eliminar</button>
+                        </form>
+                        @endif
+                    </td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
     </div>
 </div>
 
-@if(auth()->user()->isAdmin())
 <div class="panel">
     <div class="panel-header">
         <div class="panel-title">➕ Registrar Nuevo Insumo</div>
