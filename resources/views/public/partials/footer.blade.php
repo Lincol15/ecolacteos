@@ -12,12 +12,13 @@
                     </div>
                 </div>
                 <p class="footer-desc">Sistema de gestión y comercialización de productos lácteos frescos. Calidad que se percibe en cada gota.</p>
+                @if($site['facebook_url'] || $site['instagram_url'] || $site['whatsapp_planta'])
                 <div class="footer-socials">
-                    <a href="#" class="social-icon">📘</a>
-                    <a href="#" class="social-icon">📷</a>
-                    <a href="#" class="social-icon">🐦</a>
-                    <a href="#" class="social-icon">📱</a>
+                    @if($site['facebook_url'])<a href="{{ $site['facebook_url'] }}" class="social-icon" target="_blank" rel="noopener" aria-label="Facebook">📘</a>@endif
+                    @if($site['instagram_url'])<a href="{{ $site['instagram_url'] }}" class="social-icon" target="_blank" rel="noopener" aria-label="Instagram">📷</a>@endif
+                    @if($site['whatsapp_planta'])<a href="https://wa.me/{{ preg_replace('/\D/', '', $site['whatsapp_planta']) }}" class="social-icon" target="_blank" rel="noopener" aria-label="WhatsApp">💬</a>@endif
                 </div>
+                @endif
             </div>
             <div class="footer-col">
                 <h4>Empresa</h4>
@@ -38,18 +39,18 @@
             <div class="footer-col">
                 <h4>Contacto</h4>
                 <ul>
-                    <li>📍 Av. Principal S/N, Huata, Ancash</li>
-                    <li>📞 +51 43 123456</li>
-                    <li>✉️ info@ecolacteoshuata.com</li>
+                    @if($site['direccion_planta'])<li>📍 {{ $site['direccion_planta'] }}</li>@endif
+                    @if($site['telefono_planta'])<li>📞 <a href="tel:{{ preg_replace('/[^\d+]/', '', $site['telefono_planta']) }}">{{ $site['telefono_planta'] }}</a></li>@endif
+                    @if($site['email_planta'])<li>✉️ <a href="mailto:{{ $site['email_planta'] }}">{{ $site['email_planta'] }}</a></li>@endif
+                    @if($site['horario_atencion'])<li>🕒 {{ $site['horario_atencion'] }}</li>@endif
                 </ul>
             </div>
         </div>
         <div class="footer-bottom">
-            <div>© {{ date('Y') }} Ecolácteos Huata. Todos los derechos reservados.</div>
+            <div>© {{ date('Y') }} {{ $site['nombre_planta'] ?: 'Ecolácteos Huata' }}. Todos los derechos reservados.</div>
             <div style="display:flex;gap:24px">
                 <a href="{{ route('contact') }}">Política de Privacidad</a>
-                <a href="{{ route('contact') }}">Términos y Condiciones</a>
-            </div>
+                <a href="{{ route('contact') }}">Términos y Condiciones</a>            </div>
         </div>
     </div>
 </footer>

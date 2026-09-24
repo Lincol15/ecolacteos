@@ -1,8 +1,11 @@
 <?php
 
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\CartController;
 use App\Http\Controllers\CollectorController;
+use App\Http\Controllers\CustomerAuthController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\ImpersonationController;
 use App\Http\Controllers\PlantController;
 use App\Http\Controllers\ProducerController;
 use App\Http\Controllers\QualityController;
@@ -21,6 +24,32 @@ Route::middleware('redirect.role')->group(function () {
 
 Route::post('/logout', [HomeController::class, 'logout'])->name('logout')->middleware('auth');
 
+// Volver a la cuenta de administrador tras "ver como" otro usuario.
+Route::post('/impersonation/stop', [ImpersonationController::class, 'stop'])->name('impersonation.stop')->middleware('auth');
+
+// Cuentas de cliente (público, guard "customer" separado del staff).
+Route::prefix('cuenta')->name('customer.')->group(function () {
+    Route::middleware('guest:customer')->group(function () {
+        Route::get('/registro', [CustomerAuthController::class, 'showRegister'])->name('register');
+        Route::post('/registro', [CustomerAuthController::class, 'register'])->name('register.store')->middleware('throttle:10,1');
+        Route::get('/login', [CustomerAuthController::class, 'showLogin'])->name('login');
+    });
+    Route::middleware('auth:customer')->group(function () {
+        Route::post('/logout', [CustomerAuthController::class, 'logout'])->name('logout');
+        Route::get('/', [CustomerAuthController::class, 'account'])->name('account');
+    });
+});
+
+// Carrito de compras público (no requiere cuenta).
+Route::prefix('carrito')->name('cart.')->group(function () {
+    Route::get('/', [CartController::class, 'index'])->name('index');
+    Route::post('/agregar/{product}', [CartController::class, 'add'])->name('add');
+    Route::put('/{product}', [CartController::class, 'update'])->name('update');
+    Route::delete('/{product}', [CartController::class, 'remove'])->name('remove');
+    Route::get('/checkout', [CartController::class, 'checkout'])->name('checkout');
+    Route::post('/checkout', [CartController::class, 'placeOrder'])->name('place-order');
+});
+
 // Rutas de solo lectura (y registrar entrega) compartidas entre Admin y Gerente.
 Route::middleware(['auth', 'role:admin,gerente'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
@@ -38,8 +67,14 @@ Route::middleware(['auth', 'role:admin,gerente'])->prefix('admin')->name('admin.
     Route::get('/ingredients', [AdminController::class, 'ingredients'])->name('ingredients');
 
     Route::get('/sales', [AdminController::class, 'sales'])->name('sales');
+    Route::get('/sales/{sale}', [AdminController::class, 'salesShow'])->name('sales-show');
+
+    Route::get('/customers', [AdminController::class, 'customers'])->name('customers');
+    Route::get('/customers/{customer}', [AdminController::class, 'customerShow'])->name('customers-show');
 
     Route::get('/payments', [AdminController::class, 'payments'])->name('payments');
+    Route::get('/payments/{payment}/receipt', [AdminController::class, 'paymentReceipt'])->name('payment-receipt');
+    Route::get('/collector-payments/{collectorPayment}/receipt', [AdminController::class, 'collectorPaymentReceipt'])->name('collector-payment-receipt');
 });
 
 // Rutas exclusivas de Administrador (gestión completa).
@@ -49,27 +84,43 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::post('/users/store', [AdminController::class, 'userStore'])->name('user-store');
     Route::get('/users/{user}/edit', [AdminController::class, 'userEdit'])->name('users-edit');
     Route::put('/users/{user}/update', [AdminController::class, 'userUpdate'])->name('user-update');
+    Route::post('/users/{user}/impersonate', [ImpersonationController::class, 'start'])->name('users-impersonate');
 
+    Route::get('/producers/create', [AdminController::class, 'producerCreate'])->name('producers-create');
+    Route::post('/producers/store', [AdminController::class, 'producerStore'])->name('producer-store');
     Route::get('/producers/{producer}/edit', [AdminController::class, 'producerEdit'])->name('producers-edit');
     Route::put('/producers/{producer}/update', [AdminController::class, 'producerUpdate'])->name('producer-update');
+    Route::put('/producers/{producer}/toggle-status', [AdminController::class, 'producerToggleStatus'])->name('producer-toggle-status');
 
     Route::get('/collectors', [AdminController::class, 'collectors'])->name('collectors');
     Route::get('/collectors/{collector}', [AdminController::class, 'collectorShow'])->name('collectors-show');
+    Route::put('/collectors/{collector}/assign', [AdminController::class, 'collectorAssignmentUpdate'])->name('collectors-assign');
 
     Route::get('/production/create', [AdminController::class, 'productionCreate'])->name('production-create');
     Route::post('/production/store', [AdminController::class, 'productionStore'])->name('production-store');
 
     Route::post('/ingredients/store', [AdminController::class, 'ingredientStore'])->name('ingredient-store');
     Route::post('/ingredients/adjust', [AdminController::class, 'ingredientAdjust'])->name('ingredient-adjust');
+    Route::delete('/ingredients/{ingredient}', [AdminController::class, 'ingredientDestroy'])->name('ingredient-destroy');
+
+    Route::get('/products', [AdminController::class, 'products'])->name('products');
+    Route::get('/products/create', [AdminController::class, 'productsCreate'])->name('products-create');
+    Route::post('/products/store', [AdminController::class, 'productStore'])->name('product-store');
+    Route::get('/products/{product}/edit', [AdminController::class, 'productsEdit'])->name('products-edit');
+    Route::put('/products/{product}/update', [AdminController::class, 'productUpdate'])->name('product-update');
 
     Route::get('/inventory', [AdminController::class, 'inventory'])->name('inventory');
 
     Route::get('/sales/create', [AdminController::class, 'salesCreate'])->name('sales-create');
     Route::post('/sales/store', [AdminController::class, 'salesStore'])->name('sales-store');
+    Route::put('/sales/{sale}/status', [AdminController::class, 'salesUpdateStatus'])->name('sales-update-status');
 
     Route::get('/payments/process', [AdminController::class, 'paymentsProcess'])->name('payments-process');
     Route::post('/payments/generate', [AdminController::class, 'paymentsGenerate'])->name('payments-generate');
     Route::put('/payments/{payment}/mark-paid', [AdminController::class, 'paymentMarkPaid'])->name('payment-mark-paid');
+    Route::post('/collector-payments/generate', [AdminController::class, 'collectorPayrollGenerate'])->name('collector-payments-generate');
+    Route::put('/collector-payments/{collectorPayment}/mark-paid', [AdminController::class, 'collectorPaymentMarkPaid'])->name('collector-payment-mark-paid');
+    Route::put('/collectors/{collector}/salary', [AdminController::class, 'collectorSalaryUpdate'])->name('collector-salary-update');
 
     Route::get('/routes', [AdminController::class, 'routes'])->name('routes');
     Route::get('/routes/create', [AdminController::class, 'routesCreate'])->name('routes-create');
@@ -82,6 +133,7 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
 
     Route::get('/config', [AdminController::class, 'config'])->name('config');
     Route::post('/config/store', [AdminController::class, 'configStore'])->name('config-store');
+    Route::put('/config/group/{group}', [AdminController::class, 'configSaveGroup'])->name('config-save-group');
     Route::put('/config/{config}/update', [AdminController::class, 'configUpdate'])->name('config-update');
 
     Route::get('/sanctions', [AdminController::class, 'sanctions'])->name('sanctions');
@@ -104,6 +156,7 @@ Route::middleware(['auth', 'role:productor'])->prefix('producer')->name('produce
     Route::get('/quality', [ProducerController::class, 'quality'])->name('quality');
     Route::get('/payments', [ProducerController::class, 'payments'])->name('payments');
     Route::get('/payments/{payment}', [ProducerController::class, 'paymentShow'])->name('payment-show');
+    Route::get('/payments/{payment}/receipt', [ProducerController::class, 'paymentReceipt'])->name('payment-receipt');
 
     Route::get('/complaints', [ProducerController::class, 'complaints'])->name('complaints');
     Route::get('/complaints/create', [ProducerController::class, 'complaintsCreate'])->name('complaints-create');
@@ -129,6 +182,9 @@ Route::middleware(['auth', 'role:acopiador'])->prefix('collector')->name('collec
 
     Route::get('/producers', [CollectorController::class, 'producers'])->name('producers');
     Route::get('/journal', [CollectorController::class, 'journal'])->name('journal');
+
+    Route::get('/payments', [CollectorController::class, 'payments'])->name('payments');
+    Route::get('/payments/{collectorPayment}/receipt', [CollectorController::class, 'paymentReceipt'])->name('payment-receipt');
 
     Route::get('/profile', [CollectorController::class, 'profile'])->name('profile');
     Route::put('/profile/update', [CollectorController::class, 'profileUpdate'])->name('profile-update');
@@ -158,6 +214,7 @@ Route::middleware(['auth', 'role:trabajador_planta'])->prefix('plant')->name('pl
     Route::post('/production/store', [PlantController::class, 'productionStore'])->name('production-store');
     Route::get('/production/recipes/create', [PlantController::class, 'recipeCreate'])->name('recipe-create');
     Route::post('/production/recipes/store', [PlantController::class, 'recipeStore'])->name('recipe-store');
+    Route::delete('/production/recipes/{recipe}', [PlantController::class, 'recipeDestroy'])->name('recipe-destroy');
 
     Route::get('/sales', [PlantController::class, 'sales'])->name('sales');
     Route::get('/sales/create', [PlantController::class, 'salesCreate'])->name('sales-create');

@@ -70,17 +70,21 @@
                 <div class="benefit-card reveal" style="margin-bottom:20px;">
                     <div class="benefit-icon green">📍</div>
                     <h3>Ubicación</h3>
-                    <p>Av. Principal S/N, Huata, Ancash, Perú</p>
+                    <p>{{ $site['direccion_planta'] ?: '—' }}</p>
                 </div>
                 <div class="benefit-card reveal reveal-delay-1" style="margin-bottom:20px;">
                     <div class="benefit-icon amber">📞</div>
                     <h3>Teléfono</h3>
-                    <p>+51 43 123456</p>
+                    <p>
+                        @if($site['telefono_planta'])<a href="tel:{{ preg_replace('/[^\d+]/', '', $site['telefono_planta']) }}" style="color:inherit">{{ $site['telefono_planta'] }}</a>@else — @endif
+                        @if($site['horario_atencion'])<br><small>{{ $site['horario_atencion'] }}</small>@endif
+                        @if($site['whatsapp_planta'])<br><a href="https://wa.me/{{ preg_replace('/\D/', '', $site['whatsapp_planta']) }}" target="_blank" rel="noopener" style="font-weight:700">💬 Escríbenos por WhatsApp</a>@endif
+                    </p>
                 </div>
                 <div class="benefit-card reveal reveal-delay-2">
                     <div class="benefit-icon blue">✉️</div>
                     <h3>Email</h3>
-                    <p>info@ecolacteoshuata.com</p>
+                    <p>@if($site['email_planta'])<a href="mailto:{{ $site['email_planta'] }}" style="color:inherit">{{ $site['email_planta'] }}</a>@else — @endif</p>
                 </div>
             </div>
         </div>

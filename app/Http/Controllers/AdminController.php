@@ -3,12 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreMilkDeliveryRequest;
+use App\Http\Requests\StoreProducerRequest;
 use App\Http\Requests\StoreProductionCartRequest;
 use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateProducerRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Models\CollectionRoute;
+use App\Models\CollectorPayment;
 use App\Models\Complaint;
+use App\Models\Customer;
 use App\Models\Ingredient;
 use App\Models\IngredientMovement;
 use App\Models\Inventory;
@@ -26,6 +29,7 @@ use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\Sanction;
 use App\Models\User;
+use App\Services\CollectorPayrollService;
 use App\Services\MilkDeliveryService;
 use App\Services\PaymentService;
 use App\Services\ProductionBatchService;
@@ -34,6 +38,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class AdminController extends Controller
 {
@@ -160,20 +167,78 @@ class AdminController extends Controller
     {
         $query = Producer::with('user');
         if ($search = $request->search) {
-            $query->whereHas('user', fn ($q) => $q
-                ->where(DB::raw('LOWER(name)'), 'like', '%'.strtolower($search).'%')
-                ->orWhere('dni', 'like', "%{$search}%"));
-        }
-        if ($status = $request->status) {
-            $query->where('status', $status);
+            $like = '%'.strtolower($search).'%';
+            $query->where(function ($q) use ($search, $like) {
+                $q->whereHas('user', fn ($uq) => $uq
+                    ->where(DB::raw('LOWER(name)'), 'like', $like)
+                    ->orWhere('dni', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%"))
+                    ->orWhere('comunidad', 'like', "%{$search}%");
+            });
         }
         if ($zone = $request->zone) {
             $query->where('zone', $zone);
         }
+        if ($comunidad = $request->comunidad) {
+            $query->where('comunidad', $comunidad);
+        }
+
+        $counts = [
+            'total' => (clone $query)->count(),
+            'activos' => (clone $query)->where('status', 'activo')->count(),
+            'inactivos' => (clone $query)->where('status', 'inactivo')->count(),
+        ];
+
+        if ($status = $request->status) {
+            $query->where('status', $status);
+        }
+
         $producers = $query->latest()->paginate(15)->withQueryString();
         $zones = Producer::distinct()->pluck('zone')->filter()->sort()->values();
+        $comunidades = Producer::distinct()->pluck('comunidad')->filter()->sort()->values();
 
-        return view('admin.producers', compact('producers', 'zones'));
+        return view('admin.producers', compact('producers', 'zones', 'comunidades', 'counts'));
+    }
+
+    public function producerCreate()
+    {
+        return view('admin.producers-create');
+    }
+
+    public function producerStore(StoreProducerRequest $request)
+    {
+        $data = $request->validated();
+
+        DB::transaction(function () use ($data) {
+            $user = User::create([
+                'name' => $data['name'],
+                'lastname' => $data['lastname'] ?? null,
+                'dni' => $data['dni'],
+                'email' => $data['email'],
+                'phone' => $data['phone'],
+                'comunidad' => $data['comunidad'],
+                'password' => Hash::make($data['password']),
+                'role' => 'productor',
+                'active' => true,
+            ]);
+
+            Producer::create([
+                'user_id' => $user->id,
+                'code' => 'PROD-'.str_pad((string) $user->id, 5, '0', STR_PAD_LEFT),
+                'farm_name' => $data['farm_name'] ?? $data['name'],
+                'zone' => $data['comunidad'],
+                'comunidad' => $data['comunidad'],
+                'district' => 'Huata',
+                'province' => 'Huata',
+                'region' => 'Ancash',
+                'cows_count' => $data['cows_count'] ?? 0,
+                'daily_avg_liters' => $data['daily_avg_liters'] ?? 0,
+                'status' => 'activo',
+                'registration_date' => now(),
+            ]);
+        });
+
+        return redirect()->route('admin.producers')->with('success', 'Productor creado correctamente.');
     }
 
     public function producerEdit(Producer $producer)
@@ -186,6 +251,15 @@ class AdminController extends Controller
         $producer->update($request->validated());
 
         return back()->with('success', 'Productor actualizado correctamente.');
+    }
+
+    public function producerToggleStatus(Producer $producer)
+    {
+        $producer->update([
+            'status' => $producer->status === 'activo' ? 'inactivo' : 'activo',
+        ]);
+
+        return back()->with('success', 'Estado del productor actualizado correctamente.');
     }
 
     public function deliveries(Request $request)
@@ -274,17 +348,44 @@ class AdminController extends Controller
             ->where('delivery_date', $today)
             ->with('producer.user')
             ->latest()->get();
-        $routes = CollectionRoute::where('collector_id', $collector->id)
-            ->with('stops.producer.user')
-            ->latest()->get();
-        $assignedProducers = RouteStop::whereHas('collectionRoute', fn ($q) => $q->where('collector_id', $collector->id))
-            ->with('producer.user')
-            ->get()
-            ->pluck('producer')
-            ->filter()
-            ->unique('id');
+        $assignedProducers = $collector->resolveAssignedProducers();
+        $explicitAssignedIds = $collector->assignedProducers()->pluck('producers.id');
+        $assignedIds = $assignedProducers->pluck('id');
+        $allActiveProducers = Producer::where('status', 'activo')->with('user')->orderBy('comunidad')->get();
+        $allComunidades = Producer::distinct()->pluck('comunidad')->filter()->sort()->values();
 
-        return view('admin.collectors-show', compact('collector', 'todayDeliveries', 'routes', 'assignedProducers'));
+        return view('admin.collectors-show', compact(
+            'collector', 'todayDeliveries', 'assignedProducers', 'explicitAssignedIds', 'assignedIds', 'allActiveProducers', 'allComunidades'
+        ));
+    }
+
+    public function collectorAssignmentUpdate(Request $request, User $collector)
+    {
+        if ($collector->role !== 'acopiador') {
+            abort(404);
+        }
+        $data = $request->validate([
+            'comunidad' => 'nullable|string|max:150',
+            'producer_ids' => 'nullable|array',
+            'producer_ids.*' => 'integer|exists:producers,id',
+        ]);
+        $comunidad = $data['comunidad'] ?? null;
+        $selectedIds = collect($data['producer_ids'] ?? [])->map(fn ($id) => (int) $id)->unique()->sort()->values();
+        $comunidadIds = $comunidad
+            ? Producer::where('status', 'activo')->where('comunidad', $comunidad)->pluck('id')->sort()->values()
+            : collect();
+
+        $collector->update(['comunidad' => $comunidad]);
+
+        // Si lo marcado es exactamente la comunidad, no se guarda lista individual:
+        // así los productores nuevos de esa comunidad se asignan solos.
+        $collector->assignedProducers()->sync(
+            $comunidad && $selectedIds->all() === $comunidadIds->all() ? [] : $selectedIds->all()
+        );
+
+        $total = $collector->resolveAssignedProducers()->count();
+
+        return back()->with('success', "Asignación guardada: {$total} productor(es) asignado(s) a {$collector->fullname}.");
     }
 
     public function price()
@@ -366,7 +467,7 @@ class AdminController extends Controller
         try {
             $batches = $service->createCart(
                 $data['items'],
-                $data['milk_ids'],
+                $data['milk_ids'] ?? null,
                 [
                     'production_date' => $data['production_date'],
                     'status' => $data['status'],
@@ -387,30 +488,59 @@ class AdminController extends Controller
         return redirect()->route('admin.production')->with('success', $message);
     }
 
-    public function ingredients()
+    public function ingredients(Request $request)
     {
-        $ingredients = Ingredient::where('active', true)->orderBy('is_milk', 'desc')->orderBy('name')->get();
+        $ingredients = Ingredient::where('active', true)->withCount('recipeIngredients')->orderBy('is_milk', 'desc')->orderBy('name')->get();
         $ingredientMovements = IngredientMovement::with('ingredient', 'processedBy', 'productionBatch')
             ->whereHas('ingredient', fn ($q) => $q->where('is_milk', false))
             ->latest()->limit(30)->get();
-        $milkReceivedToday = MilkDelivery::where('delivery_date', Carbon::today()->toDateString())
-            ->where('recibido', true)
-            ->where('status', '!=', 'rechazado')
-            ->sum('liters');
+        $milkReport = MilkDelivery::receivedByDay($request->milk_from, $request->milk_to);
 
-        return view('admin.ingredients', compact('ingredients', 'ingredientMovements', 'milkReceivedToday'));
+        return view('admin.ingredients', compact('ingredients', 'ingredientMovements', 'milkReport'));
     }
 
     public function ingredientStore(Request $request)
     {
         $data = $request->validate([
-            'name' => 'required|string|max:100|unique:ingredients,name',
+            'name' => ['required', 'string', 'max:100', Rule::unique('ingredients', 'name')->where('active', true)],
             'unit' => 'required|in:L,ml,kg,g,und',
             'min_stock' => 'nullable|numeric|min:0',
         ]);
-        Ingredient::create([...$data, 'active' => true, 'is_milk' => false]);
+
+        // Si existía un insumo eliminado (desactivado) con el mismo nombre, se reactiva con su historial.
+        $removed = Ingredient::where('name', $data['name'])->where('active', false)->first();
+        if ($removed) {
+            $removed->update([...$data, 'active' => true]);
+        } else {
+            Ingredient::create([...$data, 'active' => true, 'is_milk' => false]);
+        }
 
         return back()->with('success', 'Insumo registrado correctamente.');
+    }
+
+    /**
+     * Elimina un insumo. La leche no se puede eliminar y un insumo usado en recetas
+     * debe quitarse primero de ellas. Si tiene movimientos se desactiva para conservar
+     * el historial; si no, se borra definitivamente.
+     */
+    public function ingredientDestroy(Ingredient $ingredient)
+    {
+        if ($ingredient->is_milk) {
+            return back()->with('error', 'La leche es un insumo del sistema y no se puede eliminar.');
+        }
+
+        $recipeNames = $ingredient->recipeIngredients()->with('recipe')->get()->pluck('recipe.name')->filter()->unique();
+        if ($recipeNames->isNotEmpty()) {
+            return back()->with('error', "No se puede eliminar \"{$ingredient->name}\": se usa en la(s) receta(s) {$recipeNames->implode(', ')}. Quítalo primero de esas recetas.");
+        }
+
+        if ($ingredient->movements()->exists()) {
+            $ingredient->update(['active' => false]);
+        } else {
+            $ingredient->delete();
+        }
+
+        return back()->with('success', "Insumo \"{$ingredient->name}\" eliminado correctamente.");
     }
 
     public function ingredientAdjust(Request $request)
@@ -443,6 +573,119 @@ class AdminController extends Controller
         return back()->with('success', $message);
     }
 
+    public function products(Request $request)
+    {
+        $query = Product::query();
+        if ($category = $request->category) {
+            $query->where('category', $category);
+        }
+        if ($search = $request->search) {
+            $query->where('name', 'like', "%{$search}%");
+        }
+        $products = $query->orderBy('sort_order')->orderBy('name')->paginate(15)->withQueryString();
+
+        return view('admin.products', compact('products'));
+    }
+
+    public function productsCreate()
+    {
+        return view('admin.products-create');
+    }
+
+    public function productStore(Request $request)
+    {
+        $data = $this->validateProduct($request);
+        $data['slug'] = $this->uniqueProductSlug($data['name']);
+        $data['sku'] = $this->uniqueProductSku($data['category']);
+        $data['specifications'] = $this->parseProductSpecifications($request);
+        if ($request->hasFile('image')) {
+            $data['image_url'] = Storage::url($request->file('image')->store('products', 'public'));
+        }
+
+        Product::create($data);
+
+        return redirect()->route('admin.products')->with('success', 'Producto creado correctamente.');
+    }
+
+    public function productsEdit(Product $product)
+    {
+        return view('admin.products-edit', compact('product'));
+    }
+
+    public function productUpdate(Request $request, Product $product)
+    {
+        $data = $this->validateProduct($request, $product);
+        $data['specifications'] = $this->parseProductSpecifications($request);
+        if ($request->hasFile('image')) {
+            $data['image_url'] = Storage::url($request->file('image')->store('products', 'public'));
+        }
+
+        $product->update($data);
+
+        return redirect()->route('admin.products')->with('success', 'Producto actualizado correctamente.');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function validateProduct(Request $request, ?Product $product = null): array
+    {
+        return $request->validate([
+            'name' => 'required|string|max:100',
+            'category' => 'required|in:'.implode(',', array_keys(Product::CATEGORIES)),
+            'description' => 'nullable|string|max:500',
+            'long_description' => 'nullable|string',
+            'unit_price' => 'required|numeric|min:0',
+            'unit' => 'required|string|max:20',
+            'emoji' => 'nullable|string|max:20',
+            'image' => 'nullable|image|max:4096',
+            'is_active' => 'required|in:0,1',
+            'show_in_catalog' => 'required|in:0,1',
+            'sort_order' => 'nullable|integer|min:0',
+        ]);
+    }
+
+    private function uniqueProductSlug(string $name): string
+    {
+        $slug = Str::slug($name);
+        $original = $slug;
+        $i = 2;
+        while (Product::withTrashed()->where('slug', $slug)->exists()) {
+            $slug = "{$original}-{$i}";
+            $i++;
+        }
+
+        return $slug;
+    }
+
+    private function uniqueProductSku(string $category): string
+    {
+        do {
+            $sku = strtoupper(Str::substr($category, 0, 4)).'-'.strtoupper(Str::random(5));
+        } while (Product::withTrashed()->where('sku', $sku)->exists());
+
+        return $sku;
+    }
+
+    /**
+     * @return array<string, string>|null
+     */
+    private function parseProductSpecifications(Request $request): ?array
+    {
+        $keys = $request->input('spec_key', []);
+        $values = $request->input('spec_value', []);
+        $specs = [];
+        foreach ($keys as $i => $key) {
+            $key = trim((string) $key);
+            $value = trim((string) ($values[$i] ?? ''));
+            if ($key !== '' && $value !== '') {
+                $specs[$key] = $value;
+            }
+        }
+
+        return $specs ?: null;
+    }
+
     public function inventory()
     {
         $products = Product::with(['inventories' => fn ($q) => $q->latest()])
@@ -461,7 +704,7 @@ class AdminController extends Controller
 
     public function sales(Request $request)
     {
-        $query = Sale::with('items.product', 'servedBy');
+        $query = Sale::with('items.product', 'servedBy', 'customer');
         if ($search = $request->search) {
             $query->where('client_name', 'like', "%{$search}%")->orWhere('invoice_number', 'like', "%{$search}%");
         }
@@ -470,6 +713,9 @@ class AdminController extends Controller
         }
         if ($to = $request->to) {
             $query->where('sale_date', '<=', $to);
+        }
+        if ($type = $request->type) {
+            $query->where('sale_type', $type);
         }
         if ($payment_status = $request->payment_status) {
             $query->where('payment_status', $payment_status);
@@ -482,6 +728,23 @@ class AdminController extends Controller
         ];
 
         return view('admin.sales', compact('sales', 'summary'));
+    }
+
+    public function salesShow(Sale $sale)
+    {
+        $sale->load('items.product', 'servedBy', 'customer');
+
+        return view('admin.sales-show', compact('sale'));
+    }
+
+    public function salesUpdateStatus(Request $request, Sale $sale)
+    {
+        $data = $request->validate([
+            'payment_status' => 'required|in:pendiente,pagado,parcial,anulado',
+        ]);
+        $sale->update($data);
+
+        return back()->with('success', 'Estado del pedido actualizado.');
     }
 
     public function salesCreate()
@@ -564,40 +827,116 @@ class AdminController extends Controller
         });
     }
 
+    /**
+     * Centro de pagos: productores (liquidación por litro) y acopiadores (sueldo mensual).
+     */
+    /**
+     * Clientes de la tienda web: los que crearon su cuenta y los que pidieron como invitados.
+     */
+    public function customers(Request $request)
+    {
+        $tab = $request->tab === 'invitados' ? 'invitados' : 'cuentas';
+        $search = trim((string) $request->search);
+
+        $customers = Customer::query()
+            ->withCount('sales')
+            ->withSum('sales', 'total_amount')
+            ->withMax('sales', 'sale_date')
+            ->when($search, fn ($q) => $q->where(fn ($w) => $w
+                ->where('name', 'like', "%{$search}%")
+                ->orWhere('email', 'like', "%{$search}%")
+                ->orWhere('phone', 'like', "%{$search}%")))
+            ->latest()
+            ->paginate(15, ['*'], 'page')->withQueryString();
+
+        $guestOrders = Sale::whereNull('customer_id')->where('sale_type', 'pedido_web');
+        $guests = (clone $guestOrders)
+            ->selectRaw("COALESCE(NULLIF(client_email, ''), client_name) as guest_key, MAX(client_name) as name, MAX(client_email) as email, MAX(client_phone) as phone, COUNT(*) as orders_count, SUM(total_amount) as total_spent, MAX(sale_date) as last_order")
+            ->when($search, fn ($q) => $q->where(fn ($w) => $w
+                ->where('client_name', 'like', "%{$search}%")
+                ->orWhere('client_email', 'like', "%{$search}%")
+                ->orWhere('client_phone', 'like', "%{$search}%")))
+            ->groupBy('guest_key')
+            ->orderByDesc('last_order')
+            ->paginate(15, ['*'], 'guests_page')->withQueryString();
+
+        $stats = [
+            'accounts' => Customer::count(),
+            'new_this_month' => Customer::where('created_at', '>=', now()->startOfMonth())->count(),
+            'guests' => (int) (clone $guestOrders)->selectRaw("COUNT(DISTINCT COALESCE(NULLIF(client_email, ''), client_name)) as total")->value('total'),
+            'web_sales' => Sale::where('sale_type', 'pedido_web')->sum('total_amount'),
+        ];
+
+        return view('admin.customers', compact('tab', 'customers', 'guests', 'stats'));
+    }
+
+    public function customerShow(Customer $customer)
+    {
+        $orders = $customer->sales()->with('items.product')->latest('sale_date')->latest('id')->paginate(10);
+        $summary = [
+            'orders' => $customer->sales()->count(),
+            'total' => $customer->sales()->sum('total_amount'),
+            'pending' => $customer->sales()->where('payment_status', '!=', 'pagado')->count(),
+        ];
+
+        return view('admin.customers-show', compact('customer', 'orders', 'summary'));
+    }
+
     public function payments(Request $request)
     {
-        $query = Payment::with('producer.user', 'processedBy');
+        $tab = $request->tab === 'acopiadores' ? 'acopiadores' : 'productores';
+        $currentMonthStart = Carbon::now()->startOfMonth();
+        $currentMonthEnd = Carbon::now()->endOfMonth();
+
+        $kpis = [
+            'pending_producers' => Payment::whereNotIn('status', ['pagado', 'rechazado'])->sum('total_amount'),
+            'pending_collectors' => CollectorPayment::where('status', '!=', 'pagado')->sum('total_amount'),
+            'paid_this_month' => Payment::where('status', 'pagado')->whereBetween('payment_date', [$currentMonthStart, $currentMonthEnd])->sum('total_amount')
+                + CollectorPayment::where('status', 'pagado')->whereBetween('payment_date', [$currentMonthStart, $currentMonthEnd])->sum('total_amount'),
+            'liters_this_month' => Payment::whereBetween('period_start', [$currentMonthStart, $currentMonthEnd])->sum('total_liters'),
+        ];
+
+        $query = Payment::with('producer.user');
         if ($status = $request->status) {
             $query->where('status', $status);
         }
-        if ($method = $request->method) {
+        if ($method = $request->input('method')) {
             $query->where('payment_method', $method);
         }
         if ($period = $request->period) {
             $month = Carbon::parse($period.'-01');
             $query->whereBetween('period_start', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()]);
         }
-        $payments = $query->latest('period_end')->paginate(15)->withQueryString();
-        $summary = [
-            'total' => $payments->total() > 0 ? (clone $query)->sum('total_amount') : 0,
-            'pagado' => $payments->total() > 0 ? (clone $query)->where('status', 'pagado')->sum('total_amount') : 0,
-            'pendiente' => $payments->total() > 0 ? (clone $query)->where('status', 'pendiente')->sum('total_amount') : 0,
-            'liters' => $payments->total() > 0 ? (clone $query)->sum('total_liters') : 0,
+        if ($search = $request->search) {
+            $query->whereHas('producer', fn ($q) => $q->where('code', 'like', "%{$search}%")
+                ->orWhereHas('user', fn ($u) => $u->where('name', 'like', "%{$search}%")->orWhere('lastname', 'like', "%{$search}%")));
+        }
+        $payments = $query->latest('period_end')->latest('id')->paginate(15, ['*'], 'page')->withQueryString();
+
+        $payrollMonth = $request->month ? Carbon::parse($request->month.'-01') : $currentMonthStart->copy();
+        $payrollStart = $payrollMonth->copy()->startOfMonth();
+        $payrollEnd = $payrollMonth->copy()->endOfMonth();
+        $collectors = User::where('role', 'acopiador')
+            ->withSum(['milkDeliveriesAsCollector as month_liters' => fn ($q) => $q
+                ->whereBetween('delivery_date', [$payrollStart->toDateString(), $payrollEnd->toDateString()])
+                ->where('status', '!=', 'rechazado')], 'liters')
+            ->with(['collectorPayments' => fn ($q) => $q->whereDate('period_month', $payrollStart)])
+            ->orderBy('name')
+            ->get();
+        $collectorHistory = CollectorPayment::with('collector')
+            ->latest('period_month')->latest('id')
+            ->paginate(10, ['*'], 'history_page')->withQueryString();
+        $monthPayments = $collectors->flatMap->collectorPayments;
+        $payroll = [
+            'total' => $monthPayments->sum('total_amount'),
+            'paid' => $monthPayments->where('status', 'pagado')->sum('total_amount'),
+            'pending' => $monthPayments->where('status', '!=', 'pagado')->sum('total_amount'),
+            'missing' => $collectors->where('active', true)->filter(fn ($c) => $c->collectorPayments->isEmpty())->count(),
         ];
 
-        $deliveryQuery = MilkDelivery::whereNotNull('collector_id')->where('status', '!=', 'rechazado');
-        if ($period = $request->period) {
-            $month = Carbon::parse($period.'-01');
-            $deliveryQuery->whereBetween('delivery_date', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()]);
-        }
-        $collectorSummary = $deliveryQuery
-            ->selectRaw('collector_id, SUM(liters) as liters, SUM(total_amount) as amount, COUNT(*) as deliveries')
-            ->groupBy('collector_id')
-            ->with('collector')
-            ->orderByDesc('liters')
-            ->get();
-
-        return view('admin.payments', compact('payments', 'summary', 'collectorSummary'));
+        return view('admin.payments', compact(
+            'tab', 'kpis', 'payments', 'collectors', 'collectorHistory', 'payroll', 'payrollMonth'
+        ));
     }
 
     public function paymentsProcess(Request $request, PaymentService $paymentService)
@@ -656,6 +995,67 @@ class AdminController extends Controller
         $paymentService->processPayment($payment, $data);
 
         return back()->with('success', 'Pago marcado como pagado.');
+    }
+
+    public function paymentReceipt(Payment $payment)
+    {
+        $payment->load('producer.user', 'items.milkDelivery', 'processedBy');
+
+        return view('payments.producer-receipt', [
+            'payment' => $payment,
+            'backUrl' => route('admin.payments'),
+        ]);
+    }
+
+    public function collectorPaymentReceipt(CollectorPayment $collectorPayment)
+    {
+        $collectorPayment->load('collector', 'processedBy');
+
+        return view('payments.collector-receipt', [
+            'payment' => $collectorPayment,
+            'backUrl' => route('admin.payments', ['tab' => 'acopiadores']),
+        ]);
+    }
+
+    public function collectorPayrollGenerate(Request $request, CollectorPayrollService $payrollService)
+    {
+        $data = $request->validate([
+            'month' => 'required|date_format:Y-m',
+        ]);
+        $month = Carbon::parse($data['month'].'-01');
+        $result = $payrollService->generateForMonth($month, Auth::id());
+
+        $message = "Planilla de {$month->locale('es')->translatedFormat('F Y')}: {$result['generated']} pago(s) generado(s).";
+        if ($result['skipped_without_salary'] > 0) {
+            $message .= " {$result['skipped_without_salary']} acopiador(es) sin sueldo definido.";
+        }
+
+        return redirect()->route('admin.payments', ['tab' => 'acopiadores', 'month' => $data['month']])
+            ->with('success', $message);
+    }
+
+    public function collectorPaymentMarkPaid(Request $request, CollectorPayment $collectorPayment, CollectorPayrollService $payrollService)
+    {
+        $data = $request->validate([
+            'payment_method' => 'nullable|in:transferencia,efectivo,cheque',
+            'transaction_number' => 'nullable|string|max:50',
+        ]);
+        $payrollService->markAsPaid($collectorPayment, $data);
+
+        return back()->with('success', "Sueldo de {$collectorPayment->collector->fullname} marcado como pagado.");
+    }
+
+    public function collectorSalaryUpdate(Request $request, User $collector)
+    {
+        if ($collector->role !== 'acopiador') {
+            abort(404);
+        }
+        $data = $request->validate([
+            'monthly_salary' => 'required|numeric|min:0|max:100000',
+        ]);
+        $collector->update(['monthly_salary' => $data['monthly_salary']]);
+
+        return back()->with('success', "Sueldo mensual de {$collector->fullname} actualizado a S/ ".number_format($data['monthly_salary'], 2).'.');
     }
 
     public function routes(Request $request)
@@ -745,9 +1145,53 @@ class AdminController extends Controller
 
     public function config()
     {
-        $configs = PlantConfig::latest()->get();
+        $knownKeys = collect(PlantConfig::SETTINGS)->flatMap(fn ($group) => array_keys($group['settings']));
+        $saved = PlantConfig::with('updatedBy')->get()->keyBy('key');
+        $groups = collect(PlantConfig::SETTINGS)->map(function (array $group) use ($saved) {
+            $group['settings'] = collect($group['settings'])->map(fn (array $setting, string $key) => [
+                ...$setting,
+                'value' => $saved->get($key)?->value ?? $setting['default'],
+            ])->all();
+            $group['updated_at'] = $saved->only(array_keys($group['settings']))->max('updated_at');
 
-        return view('admin.config', compact('configs'));
+            return $group;
+        });
+        $customConfigs = $saved->except($knownKeys->all())->sortBy('label')->values();
+
+        return view('admin.config', compact('groups', 'customConfigs'));
+    }
+
+    /**
+     * Guarda de una vez todos los ajustes de un grupo (Empresa, Acopio, Calidad).
+     */
+    public function configSaveGroup(Request $request, string $group)
+    {
+        $definition = PlantConfig::SETTINGS[$group] ?? abort(404);
+
+        $rules = [];
+        foreach ($definition['settings'] as $key => $setting) {
+            $rules["settings.{$key}"] = match (true) {
+                $setting['type'] === 'number' => ['required', 'numeric', 'min:0', 'max:1000000'],
+                $setting['type'] === 'select' => ['required', Rule::in($setting['options'])],
+                $key === 'email_planta' => ['nullable', 'email', 'max:150'],
+                in_array($key, ['facebook_url', 'instagram_url'], true) => ['nullable', 'url', 'max:255'],
+                $setting['type'] === 'text' => ['nullable', 'string', 'max:1000'],
+                default => ['nullable', 'string', 'max:255'],
+            };
+        }
+        $data = $request->validate($rules, [], collect($definition['settings'])->mapWithKeys(fn ($s, $k) => ["settings.{$k}" => mb_strtolower($s['label'])])->all());
+
+        foreach ($definition['settings'] as $key => $setting) {
+            PlantConfig::updateOrCreate(['key' => $key], [
+                'label' => $setting['label'],
+                'value' => (string) ($data['settings'][$key] ?? ''),
+                'value_type' => $setting['type'] === 'select' ? 'string' : $setting['type'],
+                'description' => $setting['help'],
+                'updated_by' => Auth::id(),
+            ]);
+        }
+
+        return redirect()->to(route('admin.config').'#'.$group)->with('success', "Se guardaron los cambios de \"{$definition['title']}\".");
     }
 
     public function configStore(Request $request)

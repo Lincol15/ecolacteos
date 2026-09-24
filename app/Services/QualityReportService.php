@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\MilkDelivery;
+use App\Models\PlantConfig;
 use App\Models\QualityReport;
 use Illuminate\Support\Facades\DB;
 
@@ -92,7 +93,7 @@ class QualityReportService
         }
 
         // Verificar agua añadida
-        if (isset($params['agua_aniadida_pct']) && $params['agua_aniadida_pct'] > 5) {
+        if (isset($params['agua_aniadida_pct']) && $params['agua_aniadida_pct'] > (float) PlantConfig::getValue('tolerancia_agua_pct', 5)) {
             $issues[] = 'Exceso de agua añadida';
             $result = 'rechazado';
             $rejectionReason = 'exceso_agua';
