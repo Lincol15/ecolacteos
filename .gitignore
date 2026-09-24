@@ -25,3 +25,6 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Archivo local de instrucciones del asistente de IA (no se publica)
+/CLAUDE.md
