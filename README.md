@@ -1,58 +1,207 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
-
 <p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
+  <img src="public/images/logo-ecolacteos.png" alt="Ecolácteos Huata" width="120">
 </p>
 
-## About Laravel
+<h1 align="center">Ecolácteos Huata</h1>
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+<p align="center">
+  Sistema web de gestión y acopio de leche, producción de lácteos y venta en línea.
+</p>
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+---
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Contenido
 
-## Learning Laravel
+- [Descripción](#descripción)
+- [Funcionalidades por rol](#funcionalidades-por-rol)
+- [Tecnologías](#tecnologías)
+- [Requisitos](#requisitos)
+- [Instalación](#instalación)
+- [Cuentas de prueba](#cuentas-de-prueba)
+- [Configuración del sistema](#configuración-del-sistema)
+- [Reglas de negocio](#reglas-de-negocio)
+- [Pruebas](#pruebas)
+- [Estructura del proyecto](#estructura-del-proyecto)
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## Descripción
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+Ecolácteos Huata cubre todo el recorrido de la leche:
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+1. **Acopio:** los acopiadores registran los litros recolectados a cada productor.
+2. **Calidad:** el laboratorio analiza cada entrega (con lectura OCR opcional del reporte).
+3. **Producción:** la planta elabora productos según recetas y descuenta leche e insumos automáticamente.
+4. **Pagos:** los productores cobran por litro y los acopiadores reciben un sueldo mensual.
+5. **Venta:** los clientes compran en la tienda web, con o sin cuenta.
 
-## Agentic Development
+Todo se administra desde un panel por roles, con una sola página de inicio de sesión.
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## Funcionalidades por rol
+
+| Rol | Qué puede hacer |
+|---|---|
+| **Administrador** | Gestión completa: usuarios, acopiadores (asignación de comunidad y productores), productores, clientes, productos, insumos, pagos (liquidaciones y planilla), calidad, sanciones, quejas, avisos, precio de la leche y configuración del sistema. Puede **ver el sistema como otro usuario** sin conocer su contraseña. |
+| **Gerente** | Consulta de productores, acopio, calidad, pagos, producción, insumos, ventas y clientes. No puede modificar la configuración ni realizar pagos. |
+| **Acopiador** | Registra acopio (solo productor, litros y observaciones; fecha, vehículo y precio son automáticos), ve sus productores asignados, su jornada y sus **boletas de sueldo mensual**. |
+| **Control de calidad** | Registra análisis de laboratorio (con OCR opcional) y consulta el historial. |
+| **Trabajador de planta** | Crea **recetas** (ingredientes por unidad de producto), registra **producción** eligiendo solo producto y cantidad, consulta insumos y la leche recibida por día, y gestiona ventas y stock. |
+| **Productor** | Consulta sus entregas, calidad, **liquidaciones con comprobante descargable**, quejas y notificaciones. |
+| **Cliente (tienda web)** | Catálogo, carrito, pedido con o sin cuenta e historial de pedidos. |
+
+### Módulos destacados
+
+- **Centro de pagos:** liquidaciones por litro para productores (con bonos y descuentos) y planilla mensual de sueldo fijo para acopiadores. Todos los comprobantes se pueden descargar en PDF desde el navegador.
+- **Producción automática:** a partir de la receta, el sistema calcula la leche y los insumos necesarios, toma la leche de las entregas más antiguas disponibles y descuenta el stock.
+- **Configuración del sistema:** los datos de la empresa (dirección, teléfono, correo, redes) se reflejan en la web pública y en los comprobantes. Las reglas de acopio, pagos y calidad también se configuran aquí.
+- **Clientes:** listado de clientes registrados e invitados, con sus pedidos y el total comprado.
+
+## Tecnologías
+
+- **Backend:** PHP 8.3 y Laravel 13
+- **Base de datos:** MySQL 8
+- **Frontend:** Blade, CSS propio y Tailwind CSS 4, compilados con Vite
+- **Gráficos:** Chart.js
+- **OCR (opcional):** Tesseract mediante `thiagoalessio/tesseract_ocr`
+- **Pruebas:** PHPUnit
+
+## Requisitos
+
+- PHP 8.3 o superior, con las extensiones `pdo_mysql`, `mbstring` y `openssl`
+- Composer 2
+- Node.js 20 o superior y npm
+- MySQL 8 (por ejemplo con Laragon o XAMPP)
+- *(Opcional)* [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) instalado en el sistema para leer automáticamente los reportes de calidad
+
+## Instalación
 
 ```bash
-composer require laravel/boost --dev
+# 1. Clonar el repositorio
+git clone https://github.com/Lincol15/ecolacteos.git
+cd ecolacteos
 
-php artisan boost:install
+# 2. Instalar dependencias
+composer install
+npm install
+
+# 3. Configurar el entorno
+cp .env.example .env
+php artisan key:generate
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Edita `.env` con los datos de tu base de datos (créala antes en MySQL):
 
-## Contributing
+```env
+APP_NAME="Ecolácteos Huata"
+APP_URL=http://localhost:8000
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=limon
+DB_USERNAME=root
+DB_PASSWORD=
+```
 
-## Code of Conduct
+```bash
+# 4. Crear las tablas y cargar los datos de ejemplo
+php artisan migrate --seed
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+# 5. Compilar los estilos y scripts
+npm run build
 
-## Security Vulnerabilities
+# 6. Levantar el servidor
+php artisan serve
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Abre **http://localhost:8000**. Para desarrollo con recarga automática de estilos, usa `npm run dev` en otra terminal.
 
-## License
+> Si las páginas del panel se ven sin estilos, borra el archivo `public/hot` (lo deja `npm run dev` si se cerró de forma inesperada) y ejecuta `npm run build`.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Cuentas de prueba
+
+Las crea `php artisan migrate --seed`. Se puede iniciar sesión con el **correo o el DNI** desde el botón **Iniciar Sesión**.
+
+| Rol | Correo | DNI | Contraseña |
+|---|---|---|---|
+| Administrador | admin@ecolacteos.com | 00000001 | `admin123` |
+| Gerente | gerente@ecolacteos.com | 00000002 | `gerente123` |
+| Acopiador | acopiador@ecolacteos.com | 00000003 | `acopiador123` |
+| Control de calidad | calidad@ecolacteos.com | 00000004 | `calidad123` |
+| Trabajador de planta | planta@ecolacteos.com | 00000005 | `planta123` |
+| Productores (1 al 8) | productor1@ecolacteos.com … productor8@ecolacteos.com | 40123001 … 40123008 | `productor123` |
+
+Los clientes de la tienda crean su cuenta desde **Iniciar Sesión → Crear cuenta**.
+
+> ⚠️ Son contraseñas de ejemplo. **Cámbialas antes de publicar el sistema.**
+
+## Configuración del sistema
+
+Desde **Admin → Configuración**, sin tocar código:
+
+| Sección | Ajustes | Dónde se usa |
+|---|---|---|
+| Empresa y contacto | Nombre, RUC, dirección, teléfono, WhatsApp, correo, horario, Facebook e Instagram | Web pública (pie de página, Contacto, Inicio) y comprobantes |
+| Acopio y pagos | Precio por litro, máximo de litros por entrega, día de pago, mínimos para los bonos por volumen y calidad | Registro de acopio y liquidaciones |
+| Control de calidad | Porcentaje máximo de agua añadida | Análisis de laboratorio |
+
+El sueldo mensual de cada acopiador se define en **Admin → Pagos → Acopiadores**.
+
+## Reglas de negocio
+
+- **Precio de la leche:** lo fija solo el administrador. El acopiador no puede modificarlo.
+- **Asignación de productores:** cada acopiador atiende los productores que el admin le marca. Si solo se elige una comunidad, se asignan todos sus productores activos.
+- **Liquidación del productor** = litros × precio + bono por calidad (5 %) + bono por volumen (3 %) − fondo solidario (1 %) − leche llevada directo a planta.
+- **Acopiador:** sueldo mensual fijo que no depende de los litros. La planilla se genera una vez por mes y no se duplica.
+- **Producción:** solo se pueden producir productos con receta. La leche se toma de las entregas más antiguas disponibles (cada entrega se usa completa) y los insumos se descuentan según la receta. Si falta leche o algún insumo, no se crea el lote.
+- **Insumos:** la leche no se puede eliminar. Un insumo usado en recetas debe quitarse primero de ellas, y si tiene movimientos se oculta pero conserva su historial.
+
+## Pruebas
+
+```bash
+php artisan test
+```
+
+`phpunit.xml` usa SQLite en memoria, lo que requiere la extensión `pdo_sqlite`. Si no la tienes, ejecuta las pruebas contra una base MySQL **separada**, porque las pruebas borran los datos de la base que usan:
+
+```bash
+# Crear una base solo para pruebas (una vez)
+mysql -u root -e "CREATE DATABASE IF NOT EXISTS limon_test"
+
+# Linux / macOS
+DB_CONNECTION=mysql DB_DATABASE=limon_test php artisan test
+
+# Windows (PowerShell)
+$env:DB_CONNECTION='mysql'; $env:DB_DATABASE='limon_test'; php artisan test
+```
+
+> Nunca ejecutes las pruebas contra la base de datos real del proyecto.
+
+## Estructura del proyecto
+
+```
+app/
+├── Http/Controllers/     # Un controlador por rol: Admin, Collector, Plant, Producer, Quality,
+│                         # más Home (web pública y login), Cart, CustomerAuth, Impersonation
+├── Http/Requests/        # Validaciones de formularios
+├── Models/               # Modelos Eloquent (MilkDelivery, Payment, CollectorPayment, Recipe, PlantConfig…)
+├── Observers/            # Cálculos automáticos al guardar entregas, pagos y análisis
+└── Services/             # Lógica de negocio: pagos, planilla, producción, calidad, OCR
+database/
+├── migrations/
+├── factories/
+└── seeders/DatabaseSeeder.php   # Usuarios, productos, recetas y datos de ejemplo
+resources/
+├── css/app.css           # Estilos del panel
+├── js/app.js             # Menú lateral y ventana de cierre de sesión
+└── views/
+    ├── admin/ collector/ plant/ producer/ quality/   # Vistas por rol
+    ├── public/           # Web pública y tienda
+    ├── payments/         # Comprobantes imprimibles
+    ├── components/       # Íconos, estado de pago, leche por día
+    └── layouts/          # Plantilla del panel y menú lateral
+routes/web.php            # Rutas agrupadas por rol
+tests/Feature/            # Pruebas de funcionalidades
+```
+
+---
+
+<p align="center">Desarrollado por <strong>4bytes</strong> para Ecolácteos Huata.</p>
