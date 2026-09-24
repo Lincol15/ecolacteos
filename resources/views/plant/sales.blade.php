@@ -61,20 +61,25 @@
         </form>
         <div class="table-wrap">
             <table>
-                <thead><tr><th>N° Factura</th><th>Fecha</th><th>Cliente</th><th>Total</th><th>Estado Pago</th></tr></thead>
+                <thead><tr><th>N° Factura</th><th>Fecha</th><th>Cliente</th><th>Origen</th><th>Total</th><th>Estado Pago</th></tr></thead>
                 <tbody>
                     @forelse($sales as $s)
                     <tr>
                         <td style="font-weight:700;color:#2563eb">{{ $s->invoice_number }}</td>
                         <td>{{ $s->sale_date?->format('d/m/Y') }}</td>
                         <td>{{ $s->client_name }}</td>
+                        <td>
+                            <span class="badge {{ $s->sale_type === 'pedido_web' ? 'badge-purple' : 'badge-gray' }}">
+                                {{ $s->sale_type === 'pedido_web' ? '🌐 Pedido Web' : '🏪 Mostrador' }}
+                            </span>
+                        </td>
                         <td style="font-weight:700">S/ {{ number_format($s->total_amount, 2) }}</td>
                         <td>
                             <span class="badge {{ $s->payment_status === 'pagado' ? 'badge-green' : ($s->payment_status === 'anulado' ? 'badge-red' : 'badge-amber') }}">{{ ucfirst($s->payment_status) }}</span>
                         </td>
                     </tr>
                     @empty
-                    <tr><td colspan="5" class="empty"><div class="empty-icon">🧾</div><h3>Sin ventas registradas</h3></td></tr>
+                    <tr><td colspan="6" class="empty"><div class="empty-icon">🧾</div><h3>Sin ventas registradas</h3></td></tr>
                     @endforelse
                 </tbody>
             </table>

@@ -262,6 +262,11 @@
         padding-top: 16px; border-top: 1px solid var(--c-border);
     }
     .product-price { font-size: 22px; font-weight: 900; color: var(--c-green-dark); }
+    .product-price-row { display: flex; align-items: baseline; gap: 5px; margin-bottom: 4px; }
+    .product-price-currency { font-size: 13px; font-weight: 700; color: var(--c-green-dark); }
+    .product-price-unit { font-size: 12px; font-weight: 600; color: var(--c-text-light); }
+    .product-add-form { padding: 0 24px 24px; }
+    .product-add-btn { width: 100%; justify-content: center; padding: 11px; font-size: 13.5px; }
     .stock-badge { padding: 4px 11px; border-radius: 20px; font-size: 11.5px; font-weight: 700; }
     .stock-badge.ok { background: var(--c-green-light); color: var(--c-green-dark); }
     .stock-badge.low { background: #FBF0D3; color: #8A6A16; }

@@ -11,6 +11,7 @@ class Sale extends Model
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
+        'customer_id',
         'invoice_number',
         'client_name',
         'client_dni_ruc',
@@ -61,6 +62,7 @@ class Sale extends Model
         'delivery' => 'Delivery',
         'mayorista' => 'Mayorista',
         'exportacion' => 'Exportación',
+        'pedido_web' => 'Pedido Web',
     ];
 
     public function items()
@@ -71,6 +73,11 @@ class Sale extends Model
     public function servedBy()
     {
         return $this->belongsTo(User::class, 'served_by');
+    }
+
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class);
     }
 
     public function inventories()

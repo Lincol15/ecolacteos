@@ -51,9 +51,9 @@
                 <label class="form-label">Tipo</label>
                 <select name="type" class="form-select" onchange="this.form.submit()">
                     <option value="">Todos</option>
-                    <option value="factura" {{ request('type') == 'factura' ? 'selected' : '' }}>Factura</option>
-                    <option value="boleta" {{ request('type') == 'boleta' ? 'selected' : '' }}>Boleta</option>
-                    <option value="nota_venta" {{ request('type') == 'nota_venta' ? 'selected' : '' }}>Nota Venta</option>
+                    @foreach(\App\Models\Sale::SALE_TYPES as $value => $label)
+                    <option value="{{ $value }}" {{ request('type') == $value ? 'selected' : '' }}>{{ $label }}</option>
+                    @endforeach
                 </select>
             </div>
             <div class="form-group">
@@ -100,19 +100,24 @@
                         <td>
                             <strong>{{ $sale->client_name }}</strong>
                             <div style="font-size:11px; color:var(--text-light);">{{ $sale->client_email ?? '' }}</div>
+                            @if($sale->customer)
+                            <div style="font-size:11px; color:var(--text-light);">👤 Cliente registrado</div>
+                            @endif
                         </td>
                         <td>
-                            <span class="badge badge-{{ match($sale->type) {
-                                'factura' => 'purple',
-                                'boleta' => 'blue',
-                                'nota_venta' => 'cyan',
+                            <span class="badge badge-{{ match($sale->sale_type) {
+                                'pedido_web' => 'purple',
+                                'delivery' => 'blue',
+                                'mayorista' => 'cyan',
+                                'exportacion' => 'amber',
                                 default => 'gray'
                             } }}">
-                                {{ match($sale->type) {
-                                    'factura' => '🧾 Factura',
-                                    'boleta' => '📄 Boleta',
-                                    'nota_venta' => '📝 Nota Venta',
-                                    default => ucfirst($sale->type)
+                                {{ match($sale->sale_type) {
+                                    'pedido_web' => '🌐 Pedido Web',
+                                    'delivery' => '🚚 Delivery',
+                                    'mayorista' => '📦 Mayorista',
+                                    'exportacion' => '🌍 Exportación',
+                                    default => '🏪 Mostrador'
                                 } }}
                             </span>
                         </td>
@@ -121,8 +126,10 @@
                         <td>{{ match($sale->payment_method) {
                             'efectivo' => '💵 Efectivo',
                             'transferencia' => '🏦 Transferencia',
+                            'yape' => '📱 Yape',
+                            'plin' => '📱 Plin',
                             'tarjeta' => '💳 Tarjeta',
-                            'credito' => '📋 Crédito',
+                            'cheque' => '📋 Cheque',
                             default => $sale->payment_method ?? '—'
                         } }}</td>
                         <td>
@@ -143,7 +150,7 @@
                             </span>
                         </td>
                         <td>
-                            <button class="btn btn-info btn-sm">🔍 Ver</button>
+                            <a href="{{ route('admin.sales-show', $sale) }}" class="btn btn-info btn-sm">🔍 Ver</a>
                         </td>
                     </tr>
                     @empty

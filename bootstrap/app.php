@@ -18,6 +18,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => RoleMiddleware::class,
             'redirect.role' => RedirectByRole::class,
         ]);
+
+        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('cuenta*') || $request->is('carrito*')
+            ? route('customer.login')
+            : route('login')
+        );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

@@ -36,10 +36,12 @@
             </div>
             @endif
 
-            <div class="cta-buttons">
-                <a href="{{ route('contact') }}" class="btn btn-primary">Consultar / Hacer Pedido</a>
+            <form method="POST" action="{{ route('cart.add', $product) }}" class="cta-buttons">
+                @csrf
+                <input type="number" name="quantity" value="1" min="1" class="form-input" style="width:80px;">
+                <button type="submit" class="btn btn-primary">🛒 Agregar al Carrito</button>
                 <a href="{{ route('catalog') }}" class="btn btn-outline">← Volver al Catálogo</a>
-            </div>
+            </form>
         </div>
     </div>
 
@@ -51,19 +53,31 @@
         </div>
         <div class="products-grid">
             @foreach($related as $p)
-            <a href="{{ route('product.show', $p->slug) }}" class="product-card reveal reveal-delay-{{ $loop->iteration % 4 }}">
-                <div class="product-img" style="background-image:url('{{ $p->image_url ?? '' }}')">
-                    @unless($p->image_url) {{ $p->emoji ?? '🧀' }} @endunless
-                </div>
+            <div class="product-card reveal reveal-delay-{{ $loop->iteration % 4 }}">
+                <a href="{{ route('product.show', $p->slug) }}">
+                    <div class="product-img" style="background-image:url('{{ $p->image_url ?? '' }}')">
+                        @unless($p->image_url) {{ $p->emoji ?? '🧀' }} @endunless
+                    </div>
+                </a>
                 <div class="product-body">
                     <div class="product-cat">{{ \App\Models\Product::CATEGORIES[$p->category] ?? $p->category }}</div>
-                    <h3>{{ $p->name }}</h3>
+                    <a href="{{ route('product.show', $p->slug) }}" style="color:inherit;">
+                        <h3>{{ $p->name }}</h3>
+                    </a>
                     <p>{{ $p->description }}</p>
                     <div class="product-footer">
-                        <span class="product-price">S/ {{ number_format($p->unit_price, 2) }}</span>
+                        <div class="product-price-row">
+                            <span class="product-price-currency">S/</span>
+                            <span class="product-price">{{ number_format($p->unit_price, 2) }}</span>
+                            <span class="product-price-unit">/ {{ $p->unit }}</span>
+                        </div>
                     </div>
                 </div>
-            </a>
+                <form method="POST" action="{{ route('cart.add', $p) }}" class="product-add-form">
+                    @csrf
+                    <button type="submit" class="btn btn-primary product-add-btn">🛒 Agregar</button>
+                </form>
+            </div>
             @endforeach
         </div>
     </section>
