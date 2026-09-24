@@ -113,6 +113,12 @@
                         <td>
                             <div style="display:flex; gap:6px;">
                                 <a href="{{ route('admin.users-edit', $user) }}" class="btn btn-info btn-sm">✏️ Editar</a>
+                                @if(! $user->isAdmin() && $user->active)
+                                <form method="POST" action="{{ route('admin.users-impersonate', $user) }}">
+                                    @csrf
+                                    <button type="submit" class="btn btn-ghost btn-sm" title="Entrar al sistema como este usuario">👁️ Ver como</button>
+                                </form>
+                                @endif
                             </div>
                         </td>
                     </tr>

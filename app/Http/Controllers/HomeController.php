@@ -81,14 +81,20 @@ class HomeController extends Controller
         return view('auth.login');
     }
 
+    /**
+     * Acceso único: primero intenta como personal (cualquier rol, con correo o DNI)
+     * y, si no coincide, como cliente de la tienda.
+     */
     public function authenticate(Request $request)
     {
         $credentials = $request->validate([
-            'email' => ['required', 'email'],
+            'email' => ['required', 'string'],
             'password' => ['required', 'string'],
         ]);
-        $loginField = filter_var($request->email, FILTER_VALIDATE_EMAIL) ? 'email' : 'dni';
-        if (Auth::attempt([$loginField => $request->email, 'password' => $request->password], $request->filled('remember'))) {
+        $remember = $request->boolean('remember');
+        $loginField = filter_var($credentials['email'], FILTER_VALIDATE_EMAIL) ? 'email' : 'dni';
+
+        if (Auth::attempt([$loginField => $credentials['email'], 'password' => $credentials['password']], $remember)) {
             $request->session()->regenerate();
             $user = auth()->user();
             if (! $user->active) {
@@ -98,6 +104,12 @@ class HomeController extends Controller
             }
 
             return redirect()->intended($this->dashboardByRole($user));
+        }
+
+        if (Auth::guard('customer')->attempt($credentials, $remember)) {
+            $request->session()->regenerate();
+
+            return redirect()->intended(route('cart.index'));
         }
 
         return back()->withErrors(['email' => 'Credenciales inválidas.'])->onlyInput('email');

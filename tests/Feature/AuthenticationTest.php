@@ -12,9 +12,9 @@ class AuthenticationTest extends TestCase
 
     public function test_login_page_can_be_rendered(): void
     {
-        $response = $this->get('/login');
+        $this->get('/login')->assertOk();
 
-        $response->assertStatus(200);
+        $this->get(route('customer.login'))->assertRedirect(route('login'));
     }
 
     public function test_users_can_authenticate_with_valid_credentials(): void
