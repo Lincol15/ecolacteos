@@ -31,10 +31,11 @@
             <thead>
                 <tr>
                     <th>Acopiador</th>
-                    <th>Teléfono</th>
+                    <th>Comunidad Asignada</th>
                     <th>Vehículo</th>
                     <th>Litros Hoy</th>
                     <th>Entregas Hoy</th>
+                    <th>Productores Asignados</th>
                     <th>Estado</th>
                     <th>Acciones</th>
                 </tr>
@@ -43,10 +44,17 @@
                 @forelse($collectors as $c)
                 <tr>
                     <td><strong>{{ $c->fullname }}</strong></td>
-                    <td>{{ $c->phone ?? '-' }}</td>
+                    <td>
+                        @if($c->comunidad)
+                        <span class="badge badge-gray">{{ $c->comunidad }}</span>
+                        @else
+                        <span style="color:var(--text-light); font-size:12px;">Sin asignar</span>
+                        @endif
+                    </td>
                     <td>{{ $c->vehiculo ?? '-' }}</td>
                     <td style="font-weight:700;color:#059669">{{ number_format($c->today_liters ?? 0, 1) }} L</td>
                     <td>{{ $c->today_deliveries ?? 0 }}</td>
+                    <td><span class="badge badge-blue">{{ $c->resolveAssignedProducers()->count() }}</span></td>
                     <td>
                         <span class="badge {{ $c->active ? 'badge-green' : 'badge-red' }}">{{ $c->active ? '✅ Activo' : '❌ Inactivo' }}</span>
                     </td>
@@ -56,7 +64,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="7">
+                    <td colspan="8">
                         <div class="empty">
                             <div class="empty-icon">🚜</div>
                             <h3>No hay acopiadores registrados</h3>

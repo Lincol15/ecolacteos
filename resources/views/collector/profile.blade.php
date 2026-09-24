@@ -46,8 +46,8 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label">Comunidad Asignada</label>
-                        <input type="text" value="{{ auth()->user()->comunidad ?? 'Sin asignar' }}" class="form-input" disabled style="background:#f1f5f9;cursor:not-allowed">
-                        <small class="form-hint">Lo asigna el administrador al crear tu usuario.</small>
+                        <input type="text" value="{{ $hasIndividualAssignment ? 'Asignación individual de productores' : (auth()->user()->comunidad ?? 'Sin asignar') }}" class="form-input" disabled style="background:#f1f5f9;cursor:not-allowed">
+                        <small class="form-hint">La asigna el administrador desde la gestión de acopiadores.</small>
                     </div>
                     <div class="form-group" style="grid-column:1 / -1">
                         <label class="form-label">Correo Electrónico</label>
@@ -86,6 +86,29 @@
                 <div class="form-actions">
                     <button type="button" class="btn btn-accent">🔑 Actualizar Contraseña</button>
                 </div>
+            </div>
+        </div>
+
+        <div class="panel" style="margin-bottom:24px">
+            <div class="panel-header">
+                <div class="panel-title">👨‍🌾 Mis Productores Asignados</div>
+                <span class="badge badge-blue">{{ $assignedProducers->count() }}</span>
+            </div>
+            <div class="table-wrap" style="max-height:320px; overflow-y:auto;">
+                <table>
+                    <thead><tr><th>Código</th><th>Productor</th><th>Comunidad</th></tr></thead>
+                    <tbody>
+                        @forelse($assignedProducers as $p)
+                        <tr>
+                            <td><code class="badge badge-blue">{{ $p->code }}</code></td>
+                            <td>{{ $p->user?->fullname ?? 'N/A' }}</td>
+                            <td>{{ $p->comunidad ?? $p->zone }}</td>
+                        </tr>
+                        @empty
+                        <tr><td colspan="3" class="empty"><div class="empty-icon">👨‍🌾</div><h3>Sin productores asignados</h3><p>El administrador aún no te asignó una comunidad ni productores.</p></td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
             </div>
         </div>
 

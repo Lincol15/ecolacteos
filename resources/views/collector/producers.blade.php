@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('page-title', 'Mis Productores')
-@section('page-subtitle', 'Productores de tus rutas de acopio (o de tu comunidad si aún no tienes rutas asignadas)')
+@section('page-subtitle', 'Productores que te asignó el administrador')
 
 @section('content')
 <div class="panel">
@@ -21,7 +21,7 @@
                     <td style="font-weight:700;color:#059669">{{ number_format($p->month_liters ?? 0, 2) }} L</td>
                 </tr>
                 @empty
-                <tr><td colspan="4" class="empty"><div class="empty-icon">👥</div><h3>Sin productores asignados</h3><p>No tienes rutas de acopio ni una comunidad asignada. Contacta al administrador.</p></td></tr>
+                <tr><td colspan="4" class="empty"><div class="empty-icon">👥</div><h3>Sin productores asignados</h3><p>El administrador aún no te asignó una comunidad ni productores.</p></td></tr>
                 @endforelse
             </tbody>
         </table>

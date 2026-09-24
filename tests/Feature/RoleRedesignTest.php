@@ -2,13 +2,11 @@
 
 namespace Tests\Feature;
 
-use App\Models\CollectionRoute;
 use App\Models\MilkDelivery;
 use App\Models\Notification;
 use App\Models\Producer;
 use App\Models\Product;
 use App\Models\QualityReport;
-use App\Models\RouteStop;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -85,18 +83,9 @@ class RoleRedesignTest extends TestCase
         $myProducer = Producer::factory()->create();
         $otherProducer = Producer::factory()->create();
 
-        $myRoute = CollectionRoute::create([
-            'name' => 'Ruta Mía', 'code' => 'RT-MINE', 'day' => 'Lunes',
-            'start_time' => '06:00', 'end_time' => '10:00', 'collector_id' => $collector->id,
-            'status' => 'planeada',
-        ]);
-        $otherRoute = CollectionRoute::create([
-            'name' => 'Ruta Otro', 'code' => 'RT-OTHER', 'day' => 'Lunes',
-            'start_time' => '06:00', 'end_time' => '10:00', 'collector_id' => $otherCollector->id,
-            'status' => 'planeada',
-        ]);
-        RouteStop::create(['collection_route_id' => $myRoute->id, 'producer_id' => $myProducer->id, 'stop_order' => 1, 'status' => 'pendiente']);
-        RouteStop::create(['collection_route_id' => $otherRoute->id, 'producer_id' => $otherProducer->id, 'stop_order' => 1, 'status' => 'pendiente']);
+        // Asignación hecha por el admin en "Configurar Asignación".
+        $collector->assignedProducers()->attach($myProducer->id);
+        $otherCollector->assignedProducers()->attach($otherProducer->id);
 
         $response = $this->actingAs($collector)->get(route('collector.producers'));
 

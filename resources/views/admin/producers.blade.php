@@ -4,6 +4,11 @@
 @section('page-subtitle', 'Administra los productores de leche del sistema')
 
 @section('top-actions')
+    @if(auth()->user()->isAdmin())
+    <a href="{{ route('admin.producers-create') }}" class="btn btn-primary">
+        ➕ Nuevo Productor
+    </a>
+    @endif
     <a href="{{ route('admin.producers') }}" class="btn btn-accent">
         📊 Exportar CSV
     </a>
@@ -13,18 +18,18 @@
 <div class="stats-grid">
     <div class="stat-card green">
         <div class="stat-label">Total Productores</div>
-        <div class="stat-value green">{{ $producers->count() }}</div>
+        <div class="stat-value green">{{ $counts['total'] }}</div>
         <div class="stat-icon-wrap green">👨‍🌾</div>
     </div>
     <div class="stat-card blue">
-        <div class="stat-label">Vacas Registradas</div>
-        <div class="stat-value blue">{{ number_format($producers->sum('cows_count'), 0) }}</div>
-        <div class="stat-icon-wrap blue">🐄</div>
+        <div class="stat-label">Activos</div>
+        <div class="stat-value blue">{{ $counts['activos'] }}</div>
+        <div class="stat-icon-wrap blue">✅</div>
     </div>
-    <div class="stat-card purple">
-        <div class="stat-label">Litros Totales (Est./mes)</div>
-        <div class="stat-value purple">{{ number_format($producers->sum('daily_avg_liters') * 30, 0) }} L</div>
-        <div class="stat-icon-wrap purple">🥛</div>
+    <div class="stat-card amber">
+        <div class="stat-label">Inactivos</div>
+        <div class="stat-value amber">{{ $counts['inactivos'] }}</div>
+        <div class="stat-icon-wrap amber">❌</div>
     </div>
 </div>
 
@@ -38,10 +43,18 @@
                 <label class="form-label">Zona / Región</label>
                 <select name="zone" class="form-select" onchange="this.form.submit()">
                     <option value="">Todas las zonas</option>
-                    @forelse(($producers->pluck('zone')->unique()->filter() ?? []) as $zone)
+                    @foreach($zones as $zone)
                     <option value="{{ $zone }}" {{ request('zone') == $zone ? 'selected' : '' }}>{{ $zone }}</option>
-                    @empty
-                    @endforelse
+                    @endforeach
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Comunidad</label>
+                <select name="comunidad" class="form-select" onchange="this.form.submit()">
+                    <option value="">Todas las comunidades</option>
+                    @foreach($comunidades as $comunidad)
+                    <option value="{{ $comunidad }}" {{ request('comunidad') == $comunidad ? 'selected' : '' }}>{{ $comunidad }}</option>
+                    @endforeach
                 </select>
             </div>
             <div class="form-group">
@@ -54,7 +67,7 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Buscar</label>
-                <input type="text" name="search" value="{{ request('search') }}" class="form-input" placeholder="Código, finca o región...">
+                <input type="text" name="search" value="{{ request('search') }}" class="form-input" placeholder="Nombre, DNI, teléfono o comunidad...">
             </div>
             <div class="form-group">
                 <label class="form-label">&nbsp;</label>
@@ -102,6 +115,13 @@
                         <td>
                             @if(auth()->user()->isAdmin())
                             <a href="{{ route('admin.producers-edit', $producer) }}" class="btn btn-info btn-sm">✏️ Editar</a>
+                            <form method="POST" action="{{ route('admin.producer-toggle-status', $producer) }}" style="display:inline;">
+                                @csrf
+                                @method('PUT')
+                                <button type="submit" class="btn btn-sm {{ $producer->status == 'activo' ? 'btn-danger' : 'btn-primary' }}">
+                                    {{ $producer->status == 'activo' ? '❌ Desactivar' : '✅ Activar' }}
+                                </button>
+                            </form>
                             @else
                             <span class="badge badge-gray">Solo lectura</span>
                             @endif

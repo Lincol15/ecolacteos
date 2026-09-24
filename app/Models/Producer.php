@@ -95,6 +95,12 @@ class Producer extends Model
         return $this->belongsToMany(CollectionRoute::class, 'route_stops');
     }
 
+    public function assignedCollectors()
+    {
+        return $this->belongsToMany(User::class, 'collector_producer_assignments', 'producer_id', 'collector_id')
+            ->withTimestamps();
+    }
+
     public function getTotalLitersByPeriod($start, $end)
     {
         return $this->milkDeliveries()
