@@ -37,6 +37,9 @@
             </div>
             <div style="text-align:right;">
                 <div style="font-size:18px;font-weight:800;color:var(--c-green-dark);">S/ {{ number_format($sale->total_amount, 2) }}</div>
+                @if($sale->order_status)
+                <span class="stock-badge {{ in_array($sale->order_status, ['entregado'], true) ? 'ok' : 'low' }}">{{ \App\Models\Sale::ORDER_STATUS[$sale->order_status] }}</span>
+                @endif
                 <span class="stock-badge {{ $sale->payment_status === 'pagado' ? 'ok' : 'low' }}">{{ \App\Models\Sale::PAYMENT_STATUS[$sale->payment_status] ?? $sale->payment_status }}</span>
             </div>
         </div>

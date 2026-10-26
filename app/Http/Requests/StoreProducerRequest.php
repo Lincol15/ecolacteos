@@ -19,6 +19,7 @@ class StoreProducerRequest extends FormRequest
             'dni' => 'required|digits:8|unique:users,dni',
             'email' => 'required|email|max:150|unique:users,email',
             'phone' => 'required|digits:9',
+            'address' => 'nullable|string|max:255',
             'comunidad' => 'required|string|max:150',
             'farm_name' => 'nullable|string|max:150',
             'cows_count' => 'nullable|integer|min:0|max:1000',

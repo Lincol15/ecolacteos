@@ -15,6 +15,8 @@ use App\Models\RecipeIngredient;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Services\ProductionBatchService;
+use App\Services\RecipeService;
+use App\Services\SaleService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -175,43 +177,12 @@ class PlantController extends Controller
         return view('plant.recipe-create', compact('products', 'ingredients'));
     }
 
-    public function recipeStore(Request $request)
+    public function recipeStore(Request $request, RecipeService $recipeService)
     {
-        $data = $request->validate([
-            'product_id' => 'required|exists:products,id',
-            'name' => 'required|string|max:150',
-            'instructions' => 'nullable|string|max:2000',
-            'ingredients' => 'required|array|min:1',
-            'ingredients.*.ingredient_id' => 'required|distinct|exists:ingredients,id',
-            'ingredients.*.quantity_per_unit' => 'required|numeric|min:0.001|max:100000',
-        ], [
-            'ingredients.*.ingredient_id.distinct' => 'No repitas el mismo insumo en la receta.',
-        ]);
+        $data = $request->validate(RecipeService::RULES, RecipeService::MESSAGES);
+        $recipeService->create($data, Auth::id());
 
-        return DB::transaction(function () use ($data) {
-            $milkQty = collect($data['ingredients'])->first(function ($row) {
-                return Ingredient::where('id', $row['ingredient_id'])->value('is_milk');
-            });
-
-            $recipe = Recipe::create([
-                'product_id' => $data['product_id'],
-                'name' => $data['name'],
-                'instructions' => $data['instructions'] ?? null,
-                'milk_liters_per_unit' => $milkQty['quantity_per_unit'] ?? 0,
-                'active' => true,
-                'created_by' => Auth::id(),
-            ]);
-
-            foreach ($data['ingredients'] as $row) {
-                RecipeIngredient::create([
-                    'recipe_id' => $recipe->id,
-                    'ingredient_id' => $row['ingredient_id'],
-                    'quantity_per_unit' => $row['quantity_per_unit'],
-                ]);
-            }
-
-            return redirect()->route('plant.production', ['tab' => 'recetas'])->with('success', 'Receta creada correctamente.');
-        });
+        return redirect()->route('plant.production', ['tab' => 'recetas'])->with('success', 'Receta creada correctamente.');
     }
 
     /**
@@ -258,21 +229,9 @@ class PlantController extends Controller
         return view('plant.sales-create', compact('products'));
     }
 
-    public function salesStore(Request $request)
+    public function salesStore(Request $request, SaleService $saleService)
     {
-        $data = $request->validate([
-            'client_name' => 'required|string|max:150',
-            'client_dni_ruc' => 'nullable|string|max:20',
-            'client_email' => 'nullable|email',
-            'client_phone' => 'nullable|string|max:20',
-            'client_address' => 'nullable|string',
-            'sale_date' => 'required|date',
-            'payment_status' => 'required|in:pendiente,pagado,parcial,anulado',
-            'payment_method' => 'required|in:efectivo,transferencia,yape,plin,cheque,tarjeta',
-            'sale_type' => 'required|in:mostrador,delivery,mayorista,exportacion',
-            'discount' => 'nullable|numeric|min:0',
-            'notes' => 'nullable|string',
-        ]);
+        $data = $request->validate(SaleService::RULES);
 
         $items = collect($request->items ?? [])->filter(fn ($i) => ($i['quantity'] ?? 0) > 0);
 
@@ -280,54 +239,9 @@ class PlantController extends Controller
             return back()->withErrors('Debe agregar al menos un producto.');
         }
 
-        return DB::transaction(function () use ($data, $items) {
-            $subtotal = 0;
-            foreach ($items as $i) {
-                $subtotal += (float) $i['quantity'] * (float) $i['unit_price'];
-            }
+        $saleService->create($data, $items, Auth::id());
 
-            $tax = round($subtotal * 0.18, 2);
-            $discount = (float) ($data['discount'] ?? 0);
-
-            $sale = Sale::create([
-                ...$data,
-                'invoice_number' => 'FV-'.Carbon::parse($data['sale_date'])->format('Ymd').'-'.str_pad((string) (Sale::count() + 1), 4, '0', STR_PAD_LEFT),
-                'subtotal' => round($subtotal, 2),
-                'tax' => $tax,
-                'discount' => $discount,
-                'total_amount' => round($subtotal + $tax - $discount, 2),
-                'served_by' => Auth::id(),
-            ]);
-
-            foreach ($items as $i) {
-                SaleItem::create([
-                    'sale_id' => $sale->id,
-                    'product_id' => $i['product_id'],
-                    'production_batch_id' => $i['batch_id'] ?? null,
-                    'quantity' => $i['quantity'],
-                    'unit_price' => $i['unit_price'],
-                    'subtotal' => round((float) $i['quantity'] * (float) $i['unit_price'], 2),
-                ]);
-
-                $product = Product::find($i['product_id']);
-                Inventory::create([
-                    'production_batch_id' => $i['batch_id'] ?? null,
-                    'product_id' => $i['product_id'],
-                    'quantity' => $i['quantity'],
-                    'unit' => $product?->unit,
-                    'movement_type' => 'salida',
-                    'unit_cost' => $product?->unit_price ? round(($product->unit_price * 0.65), 2) : 0,
-                    'total_value' => $product?->unit_price ? round((float) $i['quantity'] * ($product->unit_price * 0.65), 2) : 0,
-                    'location' => 'Punto de Venta',
-                    'reference_document' => $sale->invoice_number,
-                    'related_sale_id' => $sale->id,
-                    'processed_by' => Auth::id(),
-                    'notes' => 'Venta #'.$sale->invoice_number,
-                ]);
-            }
-
-            return redirect()->route('plant.sales', ['tab' => 'historial'])->with('success', 'Venta registrada correctamente.');
-        });
+        return redirect()->route('plant.sales', ['tab' => 'historial'])->with('success', 'Venta registrada correctamente.');
     }
 
     public function inventory()

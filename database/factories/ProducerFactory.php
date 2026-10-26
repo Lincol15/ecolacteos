@@ -2,11 +2,12 @@
 
 namespace Database\Factories;
 
+use App\Models\Producer;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Producer>
+ * @extends Factory<Producer>
  */
 class ProducerFactory extends Factory
 {
@@ -19,12 +20,12 @@ class ProducerFactory extends Factory
     {
         return [
             'user_id' => User::factory()->create(['role' => 'productor']),
-            'code' => 'PROD-' . fake()->unique()->numberBetween(1000, 9999),
+            'code' => 'PROD-'.fake()->unique()->numberBetween(1000, 9999),
             'farm_name' => fake()->company(),
             'zone' => fake()->randomElement(['Huata Centro', 'Pueblo Libre', 'San Miguel', 'Ticapampa']),
             'district' => 'Huata',
             'province' => 'Huata',
-            'region' => 'Ancash',
+            'region' => 'Puno',
             'latitude' => fake()->latitude(-10, -9),
             'longitude' => fake()->longitude(-78, -77),
             'cows_count' => fake()->numberBetween(5, 50),

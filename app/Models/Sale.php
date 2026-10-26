@@ -24,6 +24,7 @@ class Sale extends Model
         'discount',
         'total_amount',
         'payment_status',
+        'order_status',
         'payment_method',
         'sale_type',
         'served_by',
@@ -64,6 +65,32 @@ class Sale extends Model
         'exportacion' => 'Exportación',
         'pedido_web' => 'Pedido Web',
     ];
+
+    /** Estados de entrega de un pedido web, en orden. */
+    public const ORDER_STATUS = [
+        'nuevo' => 'Nuevo',
+        'confirmado' => 'Confirmado',
+        'en_camino' => 'En camino',
+        'entregado' => 'Entregado',
+        'cancelado' => 'Cancelado',
+    ];
+
+    /** Siguiente paso de cada estado (los finales no avanzan). */
+    public const NEXT_ORDER_STATUS = [
+        'nuevo' => 'confirmado',
+        'confirmado' => 'en_camino',
+        'en_camino' => 'entregado',
+    ];
+
+    public function nextOrderStatus(): ?string
+    {
+        return self::NEXT_ORDER_STATUS[$this->order_status] ?? null;
+    }
+
+    public function canBeCancelled(): bool
+    {
+        return in_array($this->order_status, ['nuevo', 'confirmado', 'en_camino'], true);
+    }
 
     public function items()
     {

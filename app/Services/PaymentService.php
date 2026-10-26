@@ -12,6 +12,38 @@ use Illuminate\Support\Facades\DB;
 class PaymentService
 {
     /**
+     * Reglas para generar liquidaciones de un período (web y API).
+     *
+     * @var array<string, string>
+     */
+    public const GENERATE_RULES = [
+        'period_start' => 'required|date',
+        'period_end' => 'required|date|after_or_equal:period_start',
+        'producer_ids' => 'required|array|min:1',
+        'producer_ids.*' => 'exists:producers,id',
+    ];
+
+    /**
+     * Genera la liquidación de cada productor que tenga entregas en el período.
+     *
+     * @param  array<int, int|string>  $producerIds
+     * @return int cantidad de liquidaciones generadas
+     */
+    public function generateForProducers(Carbon $start, Carbon $end, array $producerIds, int $processedBy): int
+    {
+        $generated = 0;
+        foreach ($producerIds as $producerId) {
+            $preview = $this->calculatePayment(Producer::findOrFail($producerId), $start, $end);
+            if ($preview['can_generate']) {
+                $this->generatePayment($preview, $processedBy);
+                $generated++;
+            }
+        }
+
+        return $generated;
+    }
+
+    /**
      * Calcular pago para un productor en un periodo
      */
     public function calculatePayment(Producer $producer, Carbon $start, Carbon $end): array

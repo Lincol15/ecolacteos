@@ -46,6 +46,21 @@ class Sanction extends Model
         'anulada' => 'Anulada',
     ];
 
+    /**
+     * Cambia el estado registrando la fecha de resolución la primera vez que deja de estar activa.
+     *
+     * @param  array{status: string, notes?: ?string}  $data
+     */
+    public function updateStatus(array $data): self
+    {
+        if ($data['status'] !== 'activa' && $this->status === 'activa') {
+            $data['resolved_date'] = now();
+        }
+        $this->update($data);
+
+        return $this;
+    }
+
     public function producer()
     {
         return $this->belongsTo(Producer::class);

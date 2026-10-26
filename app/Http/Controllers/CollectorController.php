@@ -84,11 +84,7 @@ class CollectorController extends Controller
             'status' => 'required|in:pendiente,en_camino,visitado,ausente,rechazado',
             'estimated_liters' => 'nullable|numeric|min:0',
         ]);
-        $update = $data;
-        if ($data['status'] === 'visitado' && ! $stop->visited_at) {
-            $update['visited_at'] = now();
-        }
-        $stop->update($update);
+        $stop->updateStatus($data);
 
         return back()->with('success', 'Parada actualizada.');
     }

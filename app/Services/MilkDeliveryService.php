@@ -66,6 +66,18 @@ class MilkDeliveryService
     }
 
     /**
+     * Registrar la recepción física de la entrega en planta (sale de "En Tránsito").
+     */
+    public function markReceived(MilkDelivery $delivery): MilkDelivery
+    {
+        if (! $delivery->recibido) {
+            $delivery->update(['recibido' => true]);
+        }
+
+        return $delivery->fresh();
+    }
+
+    /**
      * Aprobar una entrega
      */
     public function approve(MilkDelivery $delivery, int $approverId): MilkDelivery

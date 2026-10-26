@@ -108,6 +108,7 @@ class CartController extends Controller
                 'discount' => 0,
                 'total_amount' => round($subtotal + $tax, 2),
                 'payment_status' => 'pendiente',
+                'order_status' => 'nuevo',
                 'sale_type' => 'pedido_web',
                 'served_by' => null,
             ]);

@@ -33,6 +33,21 @@ class RouteStop extends Model
         'rechazado' => 'Rechazado',
     ];
 
+    /**
+     * Actualiza el estado de la parada; registra la hora de visita la primera vez que se marca como visitada.
+     *
+     * @param  array{status: string, estimated_liters?: float|int|string|null}  $data
+     */
+    public function updateStatus(array $data): self
+    {
+        if ($data['status'] === 'visitado' && ! $this->visited_at) {
+            $data['visited_at'] = now();
+        }
+        $this->update($data);
+
+        return $this;
+    }
+
     public function collectionRoute()
     {
         return $this->belongsTo(CollectionRoute::class);

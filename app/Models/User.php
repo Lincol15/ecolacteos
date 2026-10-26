@@ -7,11 +7,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, SoftDeletes;
+    use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
 
     protected $fillable = [
         'name',
@@ -144,6 +145,40 @@ class User extends Authenticatable
         }
 
         return Producer::where('status', 'activo')->where('comunidad', $this->comunidad)->with('user')->get();
+    }
+
+    /**
+     * Reglas de validación de la asignación de productores (web y API).
+     *
+     * @var array<string, string>
+     */
+    public const ASSIGNMENT_RULES = [
+        'comunidad' => 'nullable|string|max:150',
+        'producer_ids' => 'nullable|array',
+        'producer_ids.*' => 'integer|exists:producers,id',
+    ];
+
+    /**
+     * Asigna al acopiador una comunidad y/o una lista individual de productores.
+     * Si lo marcado es exactamente la comunidad, no se guarda lista individual:
+     * así los productores nuevos de esa comunidad se asignan solos.
+     *
+     * @param  array<int, int|string>  $producerIds
+     * @return int total de productores que quedan asignados
+     */
+    public function assignProducers(?string $comunidad, array $producerIds): int
+    {
+        $selectedIds = collect($producerIds)->map(fn ($id) => (int) $id)->unique()->sort()->values();
+        $comunidadIds = $comunidad
+            ? Producer::where('status', 'activo')->where('comunidad', $comunidad)->pluck('id')->sort()->values()
+            : collect();
+
+        $this->update(['comunidad' => $comunidad]);
+        $this->assignedProducers()->sync(
+            $comunidad && $selectedIds->all() === $comunidadIds->all() ? [] : $selectedIds->all()
+        );
+
+        return $this->resolveAssignedProducers()->count();
     }
 
     public function complaintsReported()

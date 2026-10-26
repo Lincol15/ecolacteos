@@ -21,7 +21,7 @@ class ProducerController extends Controller
         $user = Auth::user();
         $producer = $user->producer ?? Producer::firstOrCreate(['user_id' => $user->id], [
             'code' => 'PROD-'.str_pad((string) $user->id, 5, '0', STR_PAD_LEFT),
-            'zone' => 'Huata', 'district' => 'Huata', 'province' => 'Huata', 'region' => 'Ancash',
+            'zone' => 'Huata', 'district' => 'Huata', 'province' => 'Huata', 'region' => 'Puno',
             'status' => 'activo', 'registration_date' => now(),
         ]);
         $today = Carbon::today();
@@ -180,7 +180,7 @@ class ProducerController extends Controller
         ]);
         Complaint::create([
             ...$data,
-            'ticket_number' => 'TK-'.now()->year.'-'.str_pad((string) (Complaint::count() + 1), 5, '0', STR_PAD_LEFT),
+            'ticket_number' => Complaint::nextTicketNumber(),
             'producer_id' => $producer->id,
             'user_id' => Auth::id(),
             'status' => 'abierto',

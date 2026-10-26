@@ -46,6 +46,9 @@ class StoreQualityReportRequest extends FormRequest
             'rejection_reason.required' => 'Debe indicar la razón de rechazo',
             'ph.min' => 'El pH no puede ser menor a 6',
             'ph.max' => 'El pH no puede ser mayor a 7.5',
+            'numeric' => 'El campo :attribute debe ser numérico',
+            'min' => 'El campo :attribute no puede ser menor a :min',
+            'max' => 'El campo :attribute no puede ser mayor a :max',
         ];
     }
 

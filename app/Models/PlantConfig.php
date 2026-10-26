@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Validation\Rule;
 
 class PlantConfig extends Model
 {
@@ -46,7 +47,7 @@ class PlantConfig extends Model
             'settings' => [
                 'nombre_planta' => ['label' => 'Nombre de la empresa', 'type' => 'string', 'default' => 'Ecolácteos Huata S.A.C.', 'help' => 'Aparece en los comprobantes y boletas.'],
                 'ruc_planta' => ['label' => 'RUC', 'type' => 'string', 'default' => '', 'help' => 'Se imprime en los comprobantes de pago.', 'placeholder' => '20123456789'],
-                'direccion_planta' => ['label' => 'Dirección', 'type' => 'text', 'default' => 'Av. Principal S/N, Huata, Ancash, Perú', 'help' => 'Ubicación que ven los clientes en la web.'],
+                'direccion_planta' => ['label' => 'Dirección', 'type' => 'text', 'default' => 'Av. Principal S/N, Huata, Puno, Perú', 'help' => 'Ubicación que ven los clientes en la web.'],
                 'telefono_planta' => ['label' => 'Teléfono', 'type' => 'string', 'default' => '+51 43 123456', 'help' => 'Número de contacto que ven los clientes.', 'placeholder' => '+51 999 999 999'],
                 'whatsapp_planta' => ['label' => 'WhatsApp', 'type' => 'string', 'default' => '', 'help' => 'Si lo completas, la web muestra un botón para escribir por WhatsApp.', 'placeholder' => '+51 999 999 999'],
                 'email_planta' => ['label' => 'Correo de contacto', 'type' => 'string', 'default' => 'info@ecolacteoshuata.com', 'help' => 'Correo que ven los clientes en la web.', 'placeholder' => 'contacto@empresa.com'],
@@ -126,6 +127,74 @@ class PlantConfig extends Model
         return collect(self::SETTINGS['empresa']['settings'])
             ->map(fn (array $setting, string $key) => (string) (static::allValues()[$key]['value'] ?? $setting['default']))
             ->all();
+    }
+
+    /**
+     * Reglas de validación de un grupo de ajustes (Empresa, Acopio, Calidad).
+     *
+     * @return array<string, array<int, mixed>>
+     */
+    public static function groupRules(string $group): array
+    {
+        $rules = [];
+        foreach (self::SETTINGS[$group]['settings'] as $key => $setting) {
+            $rules["settings.{$key}"] = match (true) {
+                $setting['type'] === 'number' => ['required', 'numeric', 'min:0', 'max:1000000'],
+                $setting['type'] === 'select' => ['required', Rule::in($setting['options'])],
+                $key === 'email_planta' => ['nullable', 'email', 'max:150'],
+                in_array($key, ['facebook_url', 'instagram_url'], true) => ['nullable', 'url', 'max:255'],
+                $setting['type'] === 'text' => ['nullable', 'string', 'max:1000'],
+                default => ['nullable', 'string', 'max:255'],
+            };
+        }
+
+        return $rules;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function groupAttributeNames(string $group): array
+    {
+        return collect(self::SETTINGS[$group]['settings'])
+            ->mapWithKeys(fn ($s, $k) => ["settings.{$k}" => mb_strtolower($s['label'])])
+            ->all();
+    }
+
+    /**
+     * Guarda todos los ajustes de un grupo ya validados.
+     *
+     * @param  array<string, mixed>  $values
+     */
+    public static function saveGroup(string $group, array $values, ?int $userId): void
+    {
+        foreach (self::SETTINGS[$group]['settings'] as $key => $setting) {
+            self::updateOrCreate(['key' => $key], [
+                'label' => $setting['label'],
+                'value' => (string) ($values[$key] ?? ''),
+                'value_type' => $setting['type'] === 'select' ? 'string' : $setting['type'],
+                'description' => $setting['help'],
+                'updated_by' => $userId,
+            ]);
+        }
+    }
+
+    /**
+     * Grupos de ajustes con su valor vigente (o el valor por defecto).
+     *
+     * @return array<string, array{title: string, settings: array<string, array<string, mixed>>}>
+     */
+    public static function groupsWithValues(): array
+    {
+        return collect(self::SETTINGS)->map(fn (array $group) => [
+            'title' => $group['title'],
+            'settings' => collect($group['settings'])->map(fn (array $setting, string $key) => [
+                'label' => $setting['label'],
+                'type' => $setting['type'],
+                'options' => $setting['options'] ?? null,
+                'value' => static::allValues()[$key]['value'] ?? $setting['default'],
+            ])->all(),
+        ])->all();
     }
 
     public static function castValue(?string $value, string $type): mixed

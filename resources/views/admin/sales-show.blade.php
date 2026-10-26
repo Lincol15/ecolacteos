@@ -85,7 +85,17 @@
         <div class="panel-title">📦 Estado del Pedido</div>
     </div>
     <div class="panel-body">
+        @if($sale->order_status)
+        <div style="margin-bottom:12px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <span class="form-label" style="margin:0">Entrega:</span>
+            <span class="badge {{ match($sale->order_status) { 'entregado' => 'badge-green', 'cancelado' => 'badge-gray', 'nuevo' => 'badge-amber', default => 'badge-blue' } }}" style="font-size:14px; padding:8px 16px;">
+                {{ \App\Models\Sale::ORDER_STATUS[$sale->order_status] }}
+            </span>
+            <a href="{{ route('admin.orders') }}" class="link" style="font-size:13px">Gestionar en Pedidos →</a>
+        </div>
+        @endif
         <div style="margin-bottom:16px;">
+            <span class="form-label" style="margin:0 8px 0 0; display:inline">Pago:</span>
             <span class="badge {{ match($sale->payment_status) {
                 'pagado' => 'badge-green',
                 'pendiente' => 'badge-red',

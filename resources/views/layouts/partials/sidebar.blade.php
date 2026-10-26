@@ -11,6 +11,10 @@
         default => null,
     };
 
+    $newOrdersCount = in_array($role, ['admin', 'gerente'], true)
+        ? \App\Models\Sale::where('sale_type', 'pedido_web')->where('order_status', 'nuevo')->count()
+        : 0;
+
     $unreadCount = $role === 'productor'
         ? \App\Models\Notification::visibleForUser($user)->whereDoesntHave('reads', fn ($q) => $q->where('user_id', $user->id))->count()
         : 0;
@@ -26,10 +30,14 @@
                 ['label' => 'Usuarios', 'route' => 'admin.users', 'active' => ['admin.users*'], 'icon' => 'users'],
                 ['label' => 'Acopiadores', 'route' => 'admin.collectors', 'active' => ['admin.collectors*'], 'icon' => 'truck'],
                 ['label' => 'Productores', 'route' => 'admin.producers', 'active' => ['admin.producers*'], 'icon' => 'sprout'],
-                ['label' => 'Clientes', 'route' => 'admin.customers', 'active' => ['admin.customers*'], 'icon' => 'bag'],
                 ['label' => 'Pagos', 'route' => 'admin.payments', 'active' => ['admin.payments*'], 'icon' => 'card'],
                 ['label' => 'Insumos', 'route' => 'admin.ingredients', 'active' => ['admin.ingredients*'], 'icon' => 'flask'],
                 ['label' => 'Productos', 'route' => 'admin.products', 'active' => ['admin.products*'], 'icon' => 'package'],
+            ]],
+            ['title' => 'Comercial', 'items' => [
+                ['label' => 'Clientes', 'route' => 'admin.customers', 'active' => ['admin.customers*'], 'icon' => 'users'],
+                ['label' => 'Pedidos', 'route' => 'admin.orders', 'active' => ['admin.orders*'], 'icon' => 'clipboard', 'badge' => $newOrdersCount],
+                ['label' => 'Ventas', 'route' => 'admin.sales', 'active' => ['admin.sales*'], 'icon' => 'bag'],
             ]],
             ['title' => 'Calidad', 'items' => [
                 ['label' => 'Historial de Análisis', 'route' => 'admin.quality', 'active' => ['admin.quality'], 'icon' => 'microscope'],
@@ -50,8 +58,11 @@
                 ['label' => 'Pagos', 'route' => 'admin.payments', 'active' => ['admin.payments*'], 'icon' => 'card'],
                 ['label' => 'Producción', 'route' => 'admin.production', 'active' => ['admin.production'], 'icon' => 'factory'],
                 ['label' => 'Insumos', 'route' => 'admin.ingredients', 'active' => ['admin.ingredients*'], 'icon' => 'flask'],
-                ['label' => 'Ventas', 'route' => 'admin.sales', 'active' => ['admin.sales'], 'icon' => 'bag'],
+            ]],
+            ['title' => 'Comercial', 'items' => [
                 ['label' => 'Clientes', 'route' => 'admin.customers', 'active' => ['admin.customers*'], 'icon' => 'users'],
+                ['label' => 'Pedidos', 'route' => 'admin.orders', 'active' => ['admin.orders*'], 'icon' => 'clipboard', 'badge' => $newOrdersCount],
+                ['label' => 'Ventas', 'route' => 'admin.sales', 'active' => ['admin.sales*'], 'icon' => 'bag'],
             ]],
         ],
         'productor' => [

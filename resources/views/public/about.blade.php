@@ -16,7 +16,7 @@
         <div>
             <div class="hero-badge">🌿 Nuestra Historia</div>
             <h1>Del Campo de <span>Huata</span><br>a tu Mesa</h1>
-            <p style="margin:0 auto 0;max-width:640px;">Somos una empresa familiar que trabaja de la mano con productores locales de la región de Áncash para llevar leche fresca y productos lácteos artesanales de la más alta calidad a cada hogar.</p>
+            <p style="margin:0 auto 0;max-width:640px;">Somos una empresa familiar que trabaja de la mano con productores locales de la región de Puno para llevar leche fresca y productos lácteos artesanales de la más alta calidad a cada hogar.</p>
         </div>
     </div>
     <div class="hero-wave">
@@ -43,7 +43,7 @@
             <div class="split-text reveal reveal-delay-1">
                 <span class="section-badge">Nuestra misión</span>
                 <h2>Calidad que nace en el <span style="color:var(--c-gold-dark)">campo</span></h2>
-                <p>Desde nuestra planta en Huata, Áncash, recolectamos, analizamos y procesamos leche fresca cada día, garantizando trazabilidad completa desde el productor hasta el consumidor final.</p>
+                <p>Desde nuestra planta en Huata, Puno, recolectamos, analizamos y procesamos leche fresca cada día, garantizando trazabilidad completa desde el productor hasta el consumidor final.</p>
                 <div class="split-points">
                     <div class="split-point">
                         <div class="split-point-icon">🐄</div>
@@ -125,7 +125,7 @@
         <div class="stat-box reveal reveal-delay-3">
             <div class="stat-icon">📍</div>
             <h3>Huata</h3>
-            <p>Áncash, Perú</p>
+            <p>Puno, Perú</p>
         </div>
     </div>
 </section>

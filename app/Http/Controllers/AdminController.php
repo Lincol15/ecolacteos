@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreMilkDeliveryRequest;
+use App\Http\Requests\StoreNotificationRequest;
 use App\Http\Requests\StoreProducerRequest;
+use App\Http\Requests\StoreSanctionRequest;
 use App\Http\Requests\StoreProductionCartRequest;
 use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateProducerRequest;
@@ -30,9 +32,13 @@ use App\Models\SaleItem;
 use App\Models\Sanction;
 use App\Models\User;
 use App\Services\CollectorPayrollService;
+use App\Services\DashboardService;
 use App\Services\MilkDeliveryService;
 use App\Services\PaymentService;
+use App\Services\ProducerService;
 use App\Services\ProductionBatchService;
+use App\Services\SaleService;
+use App\Services\UserService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -50,19 +56,7 @@ class AdminController extends Controller
         $startMonth = $today->copy()->startOfMonth();
         $startWeek = $today->copy()->startOfWeek();
 
-        $stats = [
-            'liters_today' => MilkDelivery::where('delivery_date', $today->toDateString())->sum('liters'),
-            'liters_month' => MilkDelivery::whereBetween('delivery_date', [$startMonth, $today])->sum('liters'),
-            'producers_active' => Producer::where('status', 'activo')->count(),
-            'batches_active' => ProductionBatch::whereIn('status', ['en_proceso', 'curando'])->count(),
-            'sales_today' => Sale::where('sale_date', $today->toDateString())->sum('total_amount'),
-            'sales_month' => Sale::whereBetween('sale_date', [$startMonth, $today])->sum('total_amount'),
-            'complaints_open' => Complaint::whereIn('status', ['abierto', 'en_revision'])->count(),
-            'milk_price' => PlantConfig::getValue('precio_litro_leche', 1.70),
-            'deliveries_count' => MilkDelivery::where('delivery_date', $today->toDateString())->count(),
-            'deliveries_received' => MilkDelivery::where('delivery_date', $today->toDateString())->where('recibido', true)->count(),
-            'deliveries_in_transit' => MilkDelivery::where('delivery_date', $today->toDateString())->where('recibido', false)->count(),
-        ];
+        $stats = app(DashboardService::class)->stats($today);
 
         $collectionLabels = [];
         $collectionLiters = [];
@@ -123,28 +117,9 @@ class AdminController extends Controller
         return view('admin.users-create');
     }
 
-    public function userStore(StoreUserRequest $request)
+    public function userStore(StoreUserRequest $request, UserService $userService)
     {
-        $data = $request->validated();
-        $data['password'] = Hash::make($data['password']);
-        $data['active'] = $request->boolean('active', true);
-
-        $user = User::create($data);
-
-        if ($user->isProducer()) {
-            Producer::create([
-                'user_id' => $user->id,
-                'code' => 'PROD-'.str_pad((string) $user->id, 5, '0', STR_PAD_LEFT),
-                'farm_name' => $data['name'],
-                'zone' => $data['comunidad'] ?? 'Huata',
-                'comunidad' => $data['comunidad'] ?? null,
-                'district' => 'Huata',
-                'province' => 'Huata',
-                'region' => 'Ancash',
-                'status' => 'activo',
-                'registration_date' => now(),
-            ]);
-        }
+        $userService->create([...$request->validated(), 'active' => $request->boolean('active', true)]);
 
         return redirect()->route('admin.users')->with('success', 'Usuario creado correctamente.');
     }
@@ -205,38 +180,9 @@ class AdminController extends Controller
         return view('admin.producers-create');
     }
 
-    public function producerStore(StoreProducerRequest $request)
+    public function producerStore(StoreProducerRequest $request, ProducerService $producerService)
     {
-        $data = $request->validated();
-
-        DB::transaction(function () use ($data) {
-            $user = User::create([
-                'name' => $data['name'],
-                'lastname' => $data['lastname'] ?? null,
-                'dni' => $data['dni'],
-                'email' => $data['email'],
-                'phone' => $data['phone'],
-                'comunidad' => $data['comunidad'],
-                'password' => Hash::make($data['password']),
-                'role' => 'productor',
-                'active' => true,
-            ]);
-
-            Producer::create([
-                'user_id' => $user->id,
-                'code' => 'PROD-'.str_pad((string) $user->id, 5, '0', STR_PAD_LEFT),
-                'farm_name' => $data['farm_name'] ?? $data['name'],
-                'zone' => $data['comunidad'],
-                'comunidad' => $data['comunidad'],
-                'district' => 'Huata',
-                'province' => 'Huata',
-                'region' => 'Ancash',
-                'cows_count' => $data['cows_count'] ?? 0,
-                'daily_avg_liters' => $data['daily_avg_liters'] ?? 0,
-                'status' => 'activo',
-                'registration_date' => now(),
-            ]);
-        });
+        $producerService->register($request->validated());
 
         return redirect()->route('admin.producers')->with('success', 'Productor creado correctamente.');
     }
@@ -364,26 +310,8 @@ class AdminController extends Controller
         if ($collector->role !== 'acopiador') {
             abort(404);
         }
-        $data = $request->validate([
-            'comunidad' => 'nullable|string|max:150',
-            'producer_ids' => 'nullable|array',
-            'producer_ids.*' => 'integer|exists:producers,id',
-        ]);
-        $comunidad = $data['comunidad'] ?? null;
-        $selectedIds = collect($data['producer_ids'] ?? [])->map(fn ($id) => (int) $id)->unique()->sort()->values();
-        $comunidadIds = $comunidad
-            ? Producer::where('status', 'activo')->where('comunidad', $comunidad)->pluck('id')->sort()->values()
-            : collect();
-
-        $collector->update(['comunidad' => $comunidad]);
-
-        // Si lo marcado es exactamente la comunidad, no se guarda lista individual:
-        // así los productores nuevos de esa comunidad se asignan solos.
-        $collector->assignedProducers()->sync(
-            $comunidad && $selectedIds->all() === $comunidadIds->all() ? [] : $selectedIds->all()
-        );
-
-        $total = $collector->resolveAssignedProducers()->count();
+        $data = $request->validate(User::ASSIGNMENT_RULES);
+        $total = $collector->assignProducers($data['comunidad'] ?? null, $data['producer_ids'] ?? []);
 
         return back()->with('success', "Asignación guardada: {$total} productor(es) asignado(s) a {$collector->fullname}.");
     }
@@ -706,7 +634,7 @@ class AdminController extends Controller
     {
         $query = Sale::with('items.product', 'servedBy', 'customer');
         if ($search = $request->search) {
-            $query->where('client_name', 'like', "%{$search}%")->orWhere('invoice_number', 'like', "%{$search}%");
+            $query->where(fn ($q) => $q->where('client_name', 'like', "%{$search}%")->orWhere('invoice_number', 'like', "%{$search}%"));
         }
         if ($from = $request->from) {
             $query->where('sale_date', '>=', $from);
@@ -728,6 +656,77 @@ class AdminController extends Controller
         ];
 
         return view('admin.sales', compact('sales', 'summary'));
+    }
+
+    /**
+     * Pedidos hechos desde la tienda web y su estado de entrega.
+     */
+    public function orders(Request $request)
+    {
+        $status = array_key_exists((string) $request->status, Sale::ORDER_STATUS) ? $request->status : null;
+        $search = trim((string) $request->search);
+        $webOrders = Sale::where('sale_type', 'pedido_web');
+
+        $orders = (clone $webOrders)
+            ->with('items.product', 'customer')
+            ->when($status, fn ($q) => $q->where('order_status', $status))
+            ->when($search, fn ($q) => $q->where(fn ($w) => $w
+                ->where('invoice_number', 'like', "%{$search}%")
+                ->orWhere('client_name', 'like', "%{$search}%")
+                ->orWhere('client_phone', 'like', "%{$search}%")))
+            ->latest('sale_date')->latest('id')
+            ->paginate(12)->withQueryString();
+
+        $counts = (clone $webOrders)->selectRaw('order_status, COUNT(*) as total')->groupBy('order_status')->pluck('total', 'order_status');
+        $stats = [
+            'nuevo' => (int) ($counts['nuevo'] ?? 0),
+            'en_proceso' => (int) (($counts['confirmado'] ?? 0) + ($counts['en_camino'] ?? 0)),
+            'entregado_mes' => (clone $webOrders)->where('order_status', 'entregado')->where('updated_at', '>=', now()->startOfMonth())->count(),
+            'por_cobrar' => (clone $webOrders)->whereNotIn('order_status', ['cancelado'])->where('payment_status', '!=', 'pagado')->sum('total_amount'),
+        ];
+
+        return view('admin.orders', compact('orders', 'counts', 'stats', 'status'));
+    }
+
+    /**
+     * Avanza o cancela un pedido web. Al cancelar, los productos vuelven al stock.
+     */
+    public function orderUpdateStatus(Request $request, Sale $sale)
+    {
+        if ($sale->sale_type !== 'pedido_web') {
+            abort(404);
+        }
+        $data = $request->validate(['order_status' => ['required', Rule::in(array_keys(Sale::ORDER_STATUS))]]);
+        $newStatus = $data['order_status'];
+
+        $allowed = $newStatus === 'cancelado' ? $sale->canBeCancelled() : $sale->nextOrderStatus() === $newStatus;
+        if (! $allowed) {
+            return back()->with('error', "El pedido {$sale->invoice_number} no puede pasar de \"".Sale::ORDER_STATUS[$sale->order_status].'" a "'.Sale::ORDER_STATUS[$newStatus].'".');
+        }
+
+        DB::transaction(function () use ($sale, $newStatus) {
+            if ($newStatus === 'cancelado') {
+                foreach ($sale->items()->with('product')->get() as $item) {
+                    Inventory::create([
+                        'product_id' => $item->product_id,
+                        'quantity' => $item->quantity,
+                        'unit' => $item->product?->unit ?? 'und',
+                        'movement_type' => 'devolucion',
+                        'unit_cost' => round((float) $item->unit_price * 0.65, 2),
+                        'total_value' => round((float) $item->quantity * (float) $item->unit_price * 0.65, 2),
+                        'location' => 'Pedido Web cancelado',
+                        'related_sale_id' => $sale->id,
+                        'processed_by' => Auth::id(),
+                        'notes' => "Devolución por cancelación del pedido {$sale->invoice_number}",
+                    ]);
+                }
+                $sale->payment_status = 'anulado';
+            }
+            $sale->order_status = $newStatus;
+            $sale->save();
+        });
+
+        return back()->with('success', "Pedido {$sale->invoice_number}: ".Sale::ORDER_STATUS[$newStatus].'.');
     }
 
     public function salesShow(Sale $sale)
@@ -755,21 +754,9 @@ class AdminController extends Controller
         return view('admin.sales-create', compact('products'));
     }
 
-    public function salesStore(Request $request)
+    public function salesStore(Request $request, SaleService $saleService)
     {
-        $data = $request->validate([
-            'client_name' => 'required|string|max:150',
-            'client_dni_ruc' => 'nullable|string|max:20',
-            'client_email' => 'nullable|email',
-            'client_phone' => 'nullable|string|max:20',
-            'client_address' => 'nullable|string',
-            'sale_date' => 'required|date',
-            'payment_status' => 'required|in:pendiente,pagado,parcial,anulado',
-            'payment_method' => 'required|in:efectivo,transferencia,yape,plin,cheque,tarjeta',
-            'sale_type' => 'required|in:mostrador,delivery,mayorista,exportacion',
-            'discount' => 'nullable|numeric|min:0',
-            'notes' => 'nullable|string',
-        ]);
+        $data = $request->validate(SaleService::RULES);
 
         $items = collect($request->items ?? [])->filter(fn ($i) => ($i['quantity'] ?? 0) > 0);
 
@@ -777,54 +764,9 @@ class AdminController extends Controller
             return back()->withErrors('Debe agregar al menos un producto.');
         }
 
-        return DB::transaction(function () use ($data, $items) {
-            $subtotal = 0;
-            foreach ($items as $i) {
-                $subtotal += (float) $i['quantity'] * (float) $i['unit_price'];
-            }
+        $saleService->create($data, $items, Auth::id());
 
-            $tax = round($subtotal * 0.18, 2);
-            $discount = (float) ($data['discount'] ?? 0);
-
-            $sale = Sale::create([
-                ...$data,
-                'invoice_number' => 'FV-'.Carbon::parse($data['sale_date'])->format('Ymd').'-'.str_pad((string) (Sale::count() + 1), 4, '0', STR_PAD_LEFT),
-                'subtotal' => round($subtotal, 2),
-                'tax' => $tax,
-                'discount' => $discount,
-                'total_amount' => round($subtotal + $tax - $discount, 2),
-                'served_by' => Auth::id(),
-            ]);
-
-            foreach ($items as $i) {
-                $saleItem = SaleItem::create([
-                    'sale_id' => $sale->id,
-                    'product_id' => $i['product_id'],
-                    'production_batch_id' => $i['batch_id'] ?? null,
-                    'quantity' => $i['quantity'],
-                    'unit_price' => $i['unit_price'],
-                    'subtotal' => round((float) $i['quantity'] * (float) $i['unit_price'], 2),
-                ]);
-
-                $product = Product::find($i['product_id']);
-                Inventory::create([
-                    'production_batch_id' => $i['batch_id'] ?? null,
-                    'product_id' => $i['product_id'],
-                    'quantity' => $i['quantity'],
-                    'unit' => $product?->unit,
-                    'movement_type' => 'salida',
-                    'unit_cost' => $product?->unit_price ? round(($product->unit_price * 0.65), 2) : 0,
-                    'total_value' => $product?->unit_price ? round((float) $i['quantity'] * ($product->unit_price * 0.65), 2) : 0,
-                    'location' => 'Punto de Venta',
-                    'reference_document' => $sale->invoice_number,
-                    'related_sale_id' => $sale->id,
-                    'processed_by' => Auth::id(),
-                    'notes' => 'Venta #'.$sale->invoice_number,
-                ]);
-            }
-
-            return redirect()->route('admin.sales')->with('success', 'Venta registrada correctamente.');
-        });
+        return redirect()->route('admin.sales')->with('success', 'Venta registrada correctamente.');
     }
 
     /**
@@ -963,25 +905,10 @@ class AdminController extends Controller
 
     public function paymentsGenerate(Request $request, PaymentService $paymentService)
     {
-        $data = $request->validate([
-            'period_start' => 'required|date',
-            'period_end' => 'required|date|after_or_equal:period_start',
-            'producer_ids' => 'required|array|min:1',
-            'producer_ids.*' => 'exists:producers,id',
-        ]);
-
-        $start = Carbon::parse($data['period_start']);
-        $end = Carbon::parse($data['period_end']);
-        $generated = 0;
-
-        foreach ($data['producer_ids'] as $producerId) {
-            $producer = Producer::find($producerId);
-            $preview = $paymentService->calculatePayment($producer, $start, $end);
-            if ($preview['can_generate']) {
-                $paymentService->generatePayment($preview, Auth::id());
-                $generated++;
-            }
-        }
+        $data = $request->validate(PaymentService::GENERATE_RULES);
+        $generated = $paymentService->generateForProducers(
+            Carbon::parse($data['period_start']), Carbon::parse($data['period_end']), $data['producer_ids'], Auth::id()
+        );
 
         return redirect()->route('admin.payments')->with('success', "Se generaron {$generated} liquidaciones de pago.");
     }
@@ -1167,29 +1094,8 @@ class AdminController extends Controller
     public function configSaveGroup(Request $request, string $group)
     {
         $definition = PlantConfig::SETTINGS[$group] ?? abort(404);
-
-        $rules = [];
-        foreach ($definition['settings'] as $key => $setting) {
-            $rules["settings.{$key}"] = match (true) {
-                $setting['type'] === 'number' => ['required', 'numeric', 'min:0', 'max:1000000'],
-                $setting['type'] === 'select' => ['required', Rule::in($setting['options'])],
-                $key === 'email_planta' => ['nullable', 'email', 'max:150'],
-                in_array($key, ['facebook_url', 'instagram_url'], true) => ['nullable', 'url', 'max:255'],
-                $setting['type'] === 'text' => ['nullable', 'string', 'max:1000'],
-                default => ['nullable', 'string', 'max:255'],
-            };
-        }
-        $data = $request->validate($rules, [], collect($definition['settings'])->mapWithKeys(fn ($s, $k) => ["settings.{$k}" => mb_strtolower($s['label'])])->all());
-
-        foreach ($definition['settings'] as $key => $setting) {
-            PlantConfig::updateOrCreate(['key' => $key], [
-                'label' => $setting['label'],
-                'value' => (string) ($data['settings'][$key] ?? ''),
-                'value_type' => $setting['type'] === 'select' ? 'string' : $setting['type'],
-                'description' => $setting['help'],
-                'updated_by' => Auth::id(),
-            ]);
-        }
+        $data = $request->validate(PlantConfig::groupRules($group), [], PlantConfig::groupAttributeNames($group));
+        PlantConfig::saveGroup($group, $data['settings'] ?? [], Auth::id());
 
         return redirect()->to(route('admin.config').'#'.$group)->with('success', "Se guardaron los cambios de \"{$definition['title']}\".");
     }
@@ -1242,13 +1148,7 @@ class AdminController extends Controller
             'staff_response' => 'nullable|string|max:2000',
             'assigned_to' => 'nullable|exists:users,id',
         ]);
-        if ($data['status'] === 'respondido' && $complaint->status !== 'respondido') {
-            $data['responded_at'] = now();
-        }
-        if ($data['status'] === 'cerrado' && $complaint->status !== 'cerrado') {
-            $data['closed_at'] = now();
-        }
-        $complaint->update($data);
+        $complaint->updateStatus($data);
 
         return back()->with('success', 'Reclamo actualizado.');
     }
@@ -1274,16 +1174,9 @@ class AdminController extends Controller
         return view('admin.sanctions-create', compact('producers'));
     }
 
-    public function sanctionStore(Request $request)
+    public function sanctionStore(StoreSanctionRequest $request)
     {
-        $data = $request->validate([
-            'producer_id' => 'required|exists:producers,id',
-            'type' => 'required|in:calidad,incumplimiento,fraude,pesaje,otro',
-            'motivo' => 'required|string|max:150',
-            'description' => 'nullable|string|max:2000',
-            'amount' => 'nullable|numeric|min:0',
-            'sanction_date' => 'required|date',
-        ]);
+        $data = $request->validated();
         Sanction::create([...$data, 'issued_by' => Auth::id(), 'status' => 'activa']);
 
         return redirect()->route('admin.sanctions')->with('success', 'Sanción registrada correctamente.');
@@ -1295,10 +1188,7 @@ class AdminController extends Controller
             'status' => 'required|in:activa,cumplida,anulada',
             'notes' => 'nullable|string|max:2000',
         ]);
-        if ($data['status'] !== 'activa' && $sanction->status === 'activa') {
-            $data['resolved_date'] = now();
-        }
-        $sanction->update($data);
+        $sanction->updateStatus($data);
 
         return back()->with('success', 'Sanción actualizada.');
     }
@@ -1317,18 +1207,9 @@ class AdminController extends Controller
         return view('admin.notifications-create', compact('users'));
     }
 
-    public function notificationsStore(Request $request)
+    public function notificationsStore(StoreNotificationRequest $request)
     {
-        $data = $request->validate([
-            'target' => 'required|in:todos,productores,acopiadores,gerencia,admin',
-            'user_id' => 'nullable|exists:users,id',
-            'title' => 'required|string|max:200',
-            'message' => 'required|string|max:2000',
-            'priority' => 'required|in:baja,normal,alta,urgente',
-            'is_active' => 'nullable|boolean',
-            'published_at' => 'nullable|date',
-            'expires_at' => 'nullable|date|after:published_at',
-        ]);
+        $data = $request->validated();
         Notification::create(['created_by' => Auth::id(), ...$data, 'is_active' => $data['is_active'] ?? true]);
 
         return redirect()->route('admin.notifications')->with('success', 'Aviso publicado.');

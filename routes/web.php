@@ -69,6 +69,7 @@ Route::middleware(['auth', 'role:admin,gerente'])->prefix('admin')->name('admin.
     Route::get('/sales', [AdminController::class, 'sales'])->name('sales');
     Route::get('/sales/{sale}', [AdminController::class, 'salesShow'])->name('sales-show');
 
+    Route::get('/orders', [AdminController::class, 'orders'])->name('orders');
     Route::get('/customers', [AdminController::class, 'customers'])->name('customers');
     Route::get('/customers/{customer}', [AdminController::class, 'customerShow'])->name('customers-show');
 
@@ -114,6 +115,7 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::get('/sales/create', [AdminController::class, 'salesCreate'])->name('sales-create');
     Route::post('/sales/store', [AdminController::class, 'salesStore'])->name('sales-store');
     Route::put('/sales/{sale}/status', [AdminController::class, 'salesUpdateStatus'])->name('sales-update-status');
+    Route::put('/orders/{sale}/status', [AdminController::class, 'orderUpdateStatus'])->name('orders-update-status');
 
     Route::get('/payments/process', [AdminController::class, 'paymentsProcess'])->name('payments-process');
     Route::post('/payments/generate', [AdminController::class, 'paymentsGenerate'])->name('payments-generate');

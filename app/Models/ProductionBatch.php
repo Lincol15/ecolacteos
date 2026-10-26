@@ -49,6 +49,16 @@ class ProductionBatch extends Model
         'desperdicio' => 'Desperdicio',
     ];
 
+    /**
+     * Stock disponible del lote: entradas y devoluciones menos salidas y mermas (misma regla que Product::currentStock).
+     */
+    public function currentStock(): float
+    {
+        return (float) $this->inventories()
+            ->selectRaw('SUM(CASE WHEN movement_type IN ("entrada", "devolucion") THEN quantity ELSE -quantity END) as stock')
+            ->value('stock') ?? 0;
+    }
+
     public function product()
     {
         return $this->belongsTo(Product::class);

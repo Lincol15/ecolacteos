@@ -60,6 +60,32 @@ class Complaint extends Model
         'rechazado' => 'Rechazado',
     ];
 
+    /**
+     * Siguiente número de ticket correlativo (TK-AÑO-00001).
+     */
+    public static function nextTicketNumber(): string
+    {
+        return 'TK-'.now()->year.'-'.str_pad((string) (self::withTrashed()->count() + 1), 5, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Actualiza estado/respuesta registrando la fecha de respuesta y de cierre la primera vez.
+     *
+     * @param  array{status: string, staff_response?: ?string, assigned_to?: ?int}  $data
+     */
+    public function updateStatus(array $data): self
+    {
+        if ($data['status'] === 'respondido' && $this->status !== 'respondido') {
+            $data['responded_at'] = now();
+        }
+        if ($data['status'] === 'cerrado' && $this->status !== 'cerrado') {
+            $data['closed_at'] = now();
+        }
+        $this->update($data);
+
+        return $this;
+    }
+
     public function producer()
     {
         return $this->belongsTo(Producer::class);
