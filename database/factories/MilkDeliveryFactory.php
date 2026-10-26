@@ -27,7 +27,8 @@ class MilkDeliveryFactory extends Factory
             'liters' => $liters,
             'temperature' => fake()->randomFloat(2, 3, 8),
             'price_per_liter' => $pricePerLiter,
-            'total_amount' => round($liters * $pricePerLiter, 2),
+            // Se calcula con los litros y el precio finales, por si el test los sobrescribe
+            'total_amount' => fn (array $attributes) => round($attributes['liters'] * $attributes['price_per_liter'], 2),
             'delivery_date' => fake()->dateTimeBetween('-30 days', 'now'),
             'delivery_time' => fake()->dateTimeBetween('-30 days', 'now'),
             'container_type' => fake()->randomElement(['caneca', 'bidon', 'cisterna']),

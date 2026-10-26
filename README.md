@@ -156,21 +156,14 @@ El sueldo mensual de cada acopiador se define en **Admin → Pagos → Acopiador
 
 ## Pruebas
 
-```bash
-php artisan test
-```
-
-`phpunit.xml` usa SQLite en memoria, lo que requiere la extensión `pdo_sqlite`. Si no la tienes, ejecuta las pruebas contra una base MySQL **separada**, porque las pruebas borran los datos de la base que usan:
+Las pruebas usan MySQL con una base **separada**, `limon_test` (configurada en `phpunit.xml`), porque las migraciones usan SQL propio de MySQL y las pruebas borran los datos de la base que usan.
 
 ```bash
-# Crear una base solo para pruebas (una vez)
+# Crear la base de pruebas (una vez)
 mysql -u root -e "CREATE DATABASE IF NOT EXISTS limon_test"
 
-# Linux / macOS
-DB_CONNECTION=mysql DB_DATABASE=limon_test php artisan test
-
-# Windows (PowerShell)
-$env:DB_CONNECTION='mysql'; $env:DB_DATABASE='limon_test'; php artisan test
+# Ejecutar las pruebas
+php artisan test
 ```
 
 > Nunca ejecutes las pruebas contra la base de datos real del proyecto.

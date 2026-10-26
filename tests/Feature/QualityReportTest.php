@@ -96,6 +96,10 @@ class QualityReportTest extends TestCase
             'proteina_pct' => 3.2,   // En rango (2.9-4.2)
             'lactosa_pct' => 4.8,    // En rango (4.5-5.2)
             'ph' => 6.6,             // En rango (6.4-6.8)
+            'solidos_no_grasos_pct' => 8.8,  // En rango (8.3-9.5)
+            'total_solidos_pct' => 12.5,     // En rango (11.5-15.0)
+            'agua_aniadida_pct' => 0,        // En rango (0-5)
+            'punto_congelacion' => -0.530,   // En rango (-0.550 a -0.510)
         ]);
 
         $score = $report->qualityScore();
@@ -112,12 +116,16 @@ class QualityReportTest extends TestCase
             'proteina_pct' => 3.2,   // En rango
             'lactosa_pct' => 4.8,    // En rango
             'ph' => 7.0,             // Fuera de rango (alto)
+            'solidos_no_grasos_pct' => 8.8,  // En rango (8.3-9.5)
+            'total_solidos_pct' => 12.5,     // En rango (11.5-15.0)
+            'agua_aniadida_pct' => 0,        // En rango (0-5)
+            'punto_congelacion' => -0.530,   // En rango (-0.550 a -0.510)
         ]);
 
         $score = $report->qualityScore();
 
         $this->assertLessThan(100, $score);
-        $this->assertEquals(50.0, $score); // 2 de 4 en rango
+        $this->assertEquals(75.0, $score); // 6 de 8 en rango
     }
 
     public function test_producer_cannot_create_quality_report(): void
