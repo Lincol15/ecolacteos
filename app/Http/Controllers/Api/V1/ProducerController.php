@@ -4,12 +4,13 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreProducerRequest;
-use App\Http\Requests\UpdateProducerRequest;
+use App\Http\Requests\UpdateProducerApiRequest;
 use App\Http\Resources\ProducerResource;
 use App\Models\Producer;
 use App\Services\ProducerService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 
 class ProducerController extends Controller
@@ -71,11 +72,19 @@ class ProducerController extends Controller
             ->setStatusCode(201);
     }
 
-    public function update(UpdateProducerRequest $request, Producer $producer): ProducerResource
+    public function update(UpdateProducerApiRequest $request, Producer $producer, ProducerService $producerService): ProducerResource
     {
-        $producer->update($request->validated());
+        return new ProducerResource($producerService->update($producer, $request->validated()));
+    }
 
-        return new ProducerResource($producer->fresh('user'));
+    /**
+     * Elimina un productor sin historial (sin entregas ni pagos); si tiene, responde 422.
+     */
+    public function destroy(Producer $producer, ProducerService $producerService): Response
+    {
+        $producerService->delete($producer);
+
+        return response()->noContent();
     }
 
     public function updateStatus(Request $request, Producer $producer): ProducerResource

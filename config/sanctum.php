@@ -54,6 +54,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Tokens de la app móvil (access + refresh)
+    |--------------------------------------------------------------------------
+    |
+    | El access token autoriza las peticiones y dura poco; el refresh token solo
+    | sirve para pedir un par nuevo en /api/v1/auth/refresh y se rota en cada uso.
+    | Ambos valores están en minutos.
+    |
+    */
+
+    'access_token_expiration' => (int) env('SANCTUM_ACCESS_TOKEN_EXPIRATION', 60),
+
+    'refresh_token_expiration' => (int) env('SANCTUM_REFRESH_TOKEN_EXPIRATION', 60 * 24 * 30),
+
+    /*
+    |--------------------------------------------------------------------------
     | Token Prefix
     |--------------------------------------------------------------------------
     |

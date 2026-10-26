@@ -38,7 +38,7 @@ class MobileApiTest extends TestCase
             ->assertJsonPath('data.user.id', $user->id)
             ->assertJsonPath('data.user.role', 'acopiador');
 
-        $this->withToken($response->json('data.token'))
+        $this->withToken($response->json('data.access_token'))
             ->getJson(route('api.v1.auth.me'))
             ->assertOk()
             ->assertJsonPath('data.email', $user->email);
@@ -255,5 +255,69 @@ class MobileApiTest extends TestCase
         Sanctum::actingAs(User::factory()->create(['role' => 'acopiador', 'active' => true]));
 
         $this->postJson(route('api.v1.producers.store'), [])->assertForbidden();
+    }
+
+    public function test_admin_edits_producer_personal_and_farm_data_through_api(): void
+    {
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'active' => true]));
+        $producer = Producer::factory()->create();
+
+        $this->putJson(route('api.v1.producers.update', $producer), [
+            'name' => 'Juana',
+            'phone' => '912345678',
+            'address' => 'Jr. Puno 200',
+            'comunidad' => 'Huata Alta',
+        ])->assertOk()
+            ->assertJsonPath('data.name', 'Juana')
+            ->assertJsonPath('data.phone', '912345678')
+            ->assertJsonPath('data.comunidad', 'Huata Alta');
+
+        $this->assertDatabaseHas('users', ['id' => $producer->user_id, 'name' => 'Juana', 'address' => 'Jr. Puno 200']);
+        $this->assertDatabaseHas('producers', ['id' => $producer->id, 'comunidad' => 'Huata Alta', 'zone' => 'Huata Alta']);
+    }
+
+    public function test_editing_producer_rejects_dni_of_another_user(): void
+    {
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'active' => true]));
+        User::factory()->create(['dni' => '11112222']);
+        $producer = Producer::factory()->create();
+
+        $this->putJson(route('api.v1.producers.update', $producer), ['dni' => '11112222'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('dni');
+    }
+
+    public function test_admin_deletes_producer_without_history_and_its_account(): void
+    {
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'active' => true]));
+        $producer = Producer::factory()->create();
+
+        $this->deleteJson(route('api.v1.producers.destroy', $producer))->assertNoContent();
+
+        $this->assertSoftDeleted('producers', ['id' => $producer->id]);
+        $this->assertSoftDeleted('users', ['id' => $producer->user_id]);
+    }
+
+    public function test_producer_with_deliveries_cannot_be_deleted(): void
+    {
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'active' => true]));
+        $producer = Producer::factory()->create();
+        MilkDelivery::factory()->create(['producer_id' => $producer->id]);
+
+        $this->deleteJson(route('api.v1.producers.destroy', $producer))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('producer');
+
+        $this->assertDatabaseHas('producers', ['id' => $producer->id]);
+        $this->assertSame(1, MilkDelivery::where('producer_id', $producer->id)->count());
+    }
+
+    public function test_only_admin_can_edit_or_delete_producers(): void
+    {
+        $producer = Producer::factory()->create();
+        Sanctum::actingAs(User::factory()->create(['role' => 'gerente', 'active' => true]));
+
+        $this->putJson(route('api.v1.producers.update', $producer), ['name' => 'X'])->assertForbidden();
+        $this->deleteJson(route('api.v1.producers.destroy', $producer))->assertForbidden();
     }
 }

@@ -23,8 +23,10 @@ use Illuminate\Support\Facades\Route;
 */
 Route::prefix('v1')->name('api.v1.')->group(function () {
     Route::post('/auth/login', [AuthController::class, 'login'])->name('auth.login')->middleware('throttle:5,1');
+    Route::post('/auth/refresh', [AuthController::class, 'refresh'])->name('auth.refresh')
+        ->middleware(['auth:sanctum', 'role', 'throttle:20,1']);
 
-    Route::middleware(['auth:sanctum', 'role', 'throttle:120,1'])->group(function () {
+    Route::middleware(['auth:sanctum', 'access.token', 'role', 'throttle:120,1'])->group(function () {
         Route::get('/auth/me', [AuthController::class, 'me'])->name('auth.me');
         Route::post('/auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
 
@@ -36,6 +38,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::middleware('role:admin')->group(function () {
             Route::post('/producers', [ProducerController::class, 'store'])->name('producers.store');
             Route::put('/producers/{producer}', [ProducerController::class, 'update'])->name('producers.update');
+            Route::delete('/producers/{producer}', [ProducerController::class, 'destroy'])->name('producers.destroy');
             Route::patch('/producers/{producer}/status', [ProducerController::class, 'updateStatus'])->name('producers.update-status');
         });
 

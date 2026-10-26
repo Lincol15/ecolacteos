@@ -18,6 +18,7 @@ class MilkDeliveryResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'client_uuid' => $this->client_uuid,
             'producer_id' => $this->producer_id,
             'producer_name' => $this->whenLoaded('producer', fn () => $this->producer?->user?->fullname),
             'collector_id' => $this->collector_id,

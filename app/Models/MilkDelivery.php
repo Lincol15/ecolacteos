@@ -13,6 +13,7 @@ class MilkDelivery extends Model
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
+        'client_uuid',
         'producer_id',
         'collector_id',
         'route_stop_id',

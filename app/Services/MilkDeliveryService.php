@@ -6,6 +6,7 @@ use App\Models\MilkDelivery;
 use App\Models\PlantConfig;
 use App\Models\Producer;
 use App\Models\RouteStop;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class MilkDeliveryService
@@ -22,6 +23,15 @@ class MilkDeliveryService
             // La zona de la entrega es siempre la comunidad del productor (no se pide manualmente).
             $zona = Producer::where('id', $data['producer_id'])->value('comunidad');
 
+            // Una recolección hecha sin conexión llega después con la hora real en que se recogió.
+            $collectedAt = isset($data['collected_at'])
+                ? Carbon::parse($data['collected_at'])->setTimezone(config('app.timezone'))
+                : now();
+            if (isset($data['collected_at'])) {
+                $data['delivery_date'] = $collectedAt->toDateString();
+            }
+            unset($data['collected_at']);
+
             // Crear la entrega
             $delivery = MilkDelivery::create([
                 ...$data,
@@ -29,7 +39,7 @@ class MilkDeliveryService
                 'zona' => $zona,
                 'price_per_liter' => $price,
                 'total_amount' => round($data['liters'] * $price, 2),
-                'delivery_time' => now(),
+                'delivery_time' => $collectedAt,
                 'has_quality_analysis' => false,
                 'status' => 'registrado',
             ]);
@@ -38,7 +48,7 @@ class MilkDeliveryService
             if (isset($data['route_stop_id'])) {
                 RouteStop::where('id', $data['route_stop_id'])->update([
                     'status' => 'visitado',
-                    'visited_at' => now(),
+                    'visited_at' => $collectedAt,
                 ]);
             }
 

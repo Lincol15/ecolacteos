@@ -10,6 +10,7 @@ use App\Models\MilkDelivery;
 use App\Models\RouteStop;
 use App\Models\User;
 use App\Services\MilkDeliveryService;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Validation\ValidationException;
@@ -68,6 +69,11 @@ class MilkDeliveryController extends Controller
         $user = $request->user();
         $data = $request->validated();
 
+        // Reintento de una recolección sincronizada desde el modo sin conexión: ya existe, no se duplica.
+        if ($existing = $this->findSyncedDelivery($data['client_uuid'] ?? null, $user)) {
+            return new MilkDeliveryResource($existing->load('producer.user', 'collector'));
+        }
+
         if ($user->isCollector()) {
             $this->ensureCollectorCanRegister($user, $data);
             $collectorId = $user->id;
@@ -75,11 +81,38 @@ class MilkDeliveryController extends Controller
             $collectorId = $this->resolveCollectorForManager($request) ?? $user->id;
         }
 
-        $delivery = $deliveryService->create($data, $collectorId);
+        try {
+            $delivery = $deliveryService->create($data, $collectorId);
+        } catch (UniqueConstraintViolationException $exception) {
+            // Dos envíos simultáneos del mismo registro: el otro ya lo guardó.
+            $delivery = $this->findSyncedDelivery($data['client_uuid'] ?? null, $user) ?? throw $exception;
+
+            return new MilkDeliveryResource($delivery->load('producer.user', 'collector'));
+        }
 
         return (new MilkDeliveryResource($delivery->load('producer.user', 'collector')))
             ->response()
             ->setStatusCode(201);
+    }
+
+    /**
+     * Entrega ya registrada con el identificador generado por la app, solo si pertenece al mismo usuario.
+     */
+    private function findSyncedDelivery(?string $clientUuid, User $user): ?MilkDelivery
+    {
+        if ($clientUuid === null) {
+            return null;
+        }
+
+        $delivery = MilkDelivery::where('client_uuid', $clientUuid)->first();
+
+        if ($delivery && $user->isCollector() && $delivery->collector_id !== $user->id) {
+            throw ValidationException::withMessages([
+                'client_uuid' => 'El identificador de la recolección ya está en uso.',
+            ]);
+        }
+
+        return $delivery;
     }
 
     public function update(UpdateMilkDeliveryRequest $request, MilkDelivery $delivery, MilkDeliveryService $deliveryService): MilkDeliveryResource

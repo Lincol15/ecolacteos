@@ -35,6 +35,8 @@ class StoreMilkDeliveryRequest extends FormRequest
             'containers_count' => 'nullable|integer|min:1|max:100',
             'vehicle_plate' => 'nullable|string|max:10',
             'observations' => 'nullable|string|max:1000',
+            'client_uuid' => 'nullable|uuid',
+            'collected_at' => 'nullable|date|before_or_equal:+5 minutes|after_or_equal:-7 days',
         ];
     }
 
@@ -53,6 +55,8 @@ class StoreMilkDeliveryRequest extends FormRequest
             'temperature.max' => 'La temperatura no puede exceder 10°C',
             'delivery_date.required' => 'La fecha de entrega es obligatoria',
             'delivery_date.before_or_equal' => 'La fecha de entrega no puede ser futura',
+            'collected_at.before_or_equal' => 'La hora de recolección no puede ser futura',
+            'collected_at.after_or_equal' => 'La recolección tiene más de 7 días y ya no se puede sincronizar',
         ];
     }
 

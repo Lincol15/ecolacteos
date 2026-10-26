@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\RedirectByRole;
+use App\Http\Middleware\RejectRefreshToken;
 use App\Http\Middleware\RoleMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -18,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => RoleMiddleware::class,
             'redirect.role' => RedirectByRole::class,
+            'access.token' => RejectRefreshToken::class,
         ]);
 
         $middleware->redirectGuestsTo(fn (Request $request) => $request->is('cuenta*') || $request->is('carrito*')
